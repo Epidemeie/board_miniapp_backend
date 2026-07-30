@@ -31,10 +31,10 @@ export const requestsService = {
     });
   },
 
-  // Лента открытых заявок под конкретную услугу — то, что видит мастер
-  listOpen: (serviceId: number) =>
+  // Лента открытых заявок под услуги мастера (мастер может оказывать несколько услуг)
+  listOpen: (serviceIds: number[]) =>
     prisma.request.findMany({
-      where: { serviceId, status: "open" },
+      where: { serviceId: { in: serviceIds }, status: "open" },
       include: { user: true, service: true },
       orderBy: { id: "desc" },
     }),

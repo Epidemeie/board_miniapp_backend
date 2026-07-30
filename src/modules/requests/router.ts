@@ -12,11 +12,14 @@ requestsRouter.post("/", async (req, res, next) => {
   }
 });
 
-// Лента открытых заявок под услугу — для мастера
+// Лента открытых заявок под услуги мастера — serviceId может быть списком через запятую
 requestsRouter.get("/open", async (req, res, next) => {
   try {
-    const serviceId = Number(req.query.serviceId);
-    res.json(await requestsService.listOpen(serviceId));
+    const serviceIds = String(req.query.serviceId || "")
+      .split(",")
+      .map(Number)
+      .filter((n) => !Number.isNaN(n));
+    res.json(await requestsService.listOpen(serviceIds));
   } catch (e) {
     next(e);
   }
