@@ -31,6 +31,25 @@ export const requestsService = {
     });
   },
 
+  // Лента открытых заявок под конкретную услугу — то, что видит мастер
+  listOpen: (serviceId: number) =>
+    prisma.request.findMany({
+      where: { serviceId, status: "open" },
+      include: { user: true, service: true },
+      orderBy: { id: "desc" },
+    }),
+
+  // Заявки клиента + отклики по ним — экран «Мои заявки»
+  listMine: (telegramId: string) =>
+    prisma.request.findMany({
+      where: { user: { telegramId } },
+      include: {
+        service: true,
+        offers: { include: { provider: { include: { user: true } } } },
+      },
+      orderBy: { id: "desc" },
+    }),
+
   listForAdmin: () =>
     prisma.request.findMany({
       include: { user: true, service: { include: { category: true } }, offers: true },

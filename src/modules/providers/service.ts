@@ -26,6 +26,13 @@ export const providersService = {
       },
     }),
 
+  // Фронтенд проверяет этим, зарегистрирован ли открывший Mini App как мастер
+  getByTelegramId: (telegramId: string) =>
+    prisma.provider.findFirst({
+      where: { user: { telegramId } },
+      include: { user: true, services: { include: { service: true } }, areas: true },
+    }),
+
   // Ручное добавление мастера из админки (документ явно рекомендует так стартовать)
   create: async (data: {
     telegramId: string;

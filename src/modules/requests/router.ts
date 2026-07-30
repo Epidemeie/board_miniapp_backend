@@ -12,6 +12,25 @@ requestsRouter.post("/", async (req, res, next) => {
   }
 });
 
+// Лента открытых заявок под услугу — для мастера
+requestsRouter.get("/open", async (req, res, next) => {
+  try {
+    const serviceId = Number(req.query.serviceId);
+    res.json(await requestsService.listOpen(serviceId));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Заявки клиента + отклики по ним
+requestsRouter.get("/mine", async (req, res, next) => {
+  try {
+    res.json(await requestsService.listMine(String(req.query.telegramId)));
+  } catch (e) {
+    next(e);
+  }
+});
+
 // Ключевой публичный эндпоинт: подобрать мастеров под конкретную заявку
 requestsRouter.get("/:id/candidates", async (req, res, next) => {
   try {

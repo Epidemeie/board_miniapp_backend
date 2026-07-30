@@ -12,6 +12,24 @@ providersRouter.get("/", async (req, res, next) => {
   }
 });
 
+// Фронтенд проверяет здесь, зарегистрирован ли открывший Mini App как мастер
+providersRouter.get("/by-telegram/:telegramId", async (req, res, next) => {
+  try {
+    res.json(await providersService.getByTelegramId(req.params.telegramId));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Самостоятельная регистрация мастера из Mini App (без админки), verified: false по умолчанию
+providersRouter.post("/register", async (req, res, next) => {
+  try {
+    res.json(await providersService.create(req.body));
+  } catch (e) {
+    next(e);
+  }
+});
+
 providersRouter.get("/:id", async (req, res, next) => {
   try {
     const provider = await providersService.get(Number(req.params.id));
