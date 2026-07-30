@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  telegramId String   @unique @map("telegram_id")
+  name       String
+  username   String?
+  role       String   @default("client") // client | provider | admin
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  provider Provider?
+  requests Request[]
+  reviews  Review[]
+
+  @@map("users")
+}
+
+model Provider {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique @map("user_id")
+  user            User     @relation(fields: [userId], references: [id])
+  description     String?
+  priceFrom       Int?     @map("price_from")
+  rating          Float    @default(0)
+  reviewCount     Int      @default(0) @map("review_count")
+  responseTimeMin Int      @default(30) @map("response_time_min")
+  verified        Boolean  @default(false)
+  blocked         Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  services ProviderService[]
+  areas    ProviderArea[]
+  offers   Offer[]
+  reviews  Review[]
+
+  @@map("providers")
+}
+
+model Category {
+  id       Int       @id @default(autoincrement())
+  name     String
+  icon     String?
+  services Service[]
+
+  @@map("categories")
+}
+
+model Service {
+  id         Int      @id @default(autoincrement())
+  categoryId Int      @map("category_id")
+  category   Category @relation(fields: [categoryId], references: [id])
+  name       String
+
+  providers ProviderService[]
+  requests  Request[]
+
+  @@map("services")
+}
+
+model ProviderService {
+  providerId Int      @map("provider_id")
+  serviceId  Int      @map("service_id")
+  provider   Provider @relation(fields: [providerId], references: [id])
+  service    Service  @relation(fields: [serviceId], references: [id])
+
+  @@id([providerId, serviceId])
+  @@map("provider_services")
+}
+
+model ProviderArea {
+  providerId Int      @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id])
+  area       String
+
+  @@id([providerId, area])
+  @@map("provider_areas")
+}
+
+model Request {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  user        User     @relation(fields: [userId], references: [id])
+  serviceId   Int      @map("service_id")
+  service     Service  @relation(fields: [serviceId], references: [id])
+  description String?
+  budget      Int?
+  urgency     String?
+  area        String?
+  status      String   @default("open") // open | matched | completed | cancelled
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  offers  Offer[]
+  reviews Review[]
+
+  @@map("requests")
+}
+
+model Offer {
+  id         Int      @id @default(autoincrement())
+  requestId  Int      @map("request_id")
+  request    Request  @relation(fields: [requestId], references: [id])
+  providerId Int      @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id])
+  price      Int
+  comment    String?
+  status     String   @default("pending") // pending | accepted | declined
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("offers")
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  requestId  Int      @map("request_id")
+  request    Request  @relation(fields: [requestId], references: [id])
+  providerId Int      @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id])
+  userId     Int      @map("user_id")
+  user       User     @relation(fields: [userId], references: [id])
+  rating     Int
+  tags       String[] @default([])
+  text       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("reviews")
+}

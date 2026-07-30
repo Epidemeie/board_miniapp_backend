@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Админка · Мастера Тбилиси</title>
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+  <div id="login-screen" class="login-screen">
+    <div class="login-box">
+      <h1>Вход в админку</h1>
+      <input id="login-user" type="text" placeholder="Логин" autocomplete="username" />
+      <input id="login-pass" type="password" placeholder="Пароль" autocomplete="current-password" />
+      <button id="login-btn">Войти</button>
+      <p id="login-error" class="error"></p>
+    </div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <header class="topbar">
+      <span class="brand">Мастера · Тбилиси</span>
+      <button id="logout-btn" class="ghost-btn">Выйти</button>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab-btn is-active" data-tab="stats">Аналитика</button>
+      <button class="tab-btn" data-tab="categories">Категории</button>
+      <button class="tab-btn" data-tab="services">Услуги</button>
+      <button class="tab-btn" data-tab="providers">Мастера</button>
+      <button class="tab-btn" data-tab="requests">Заявки</button>
+      <button class="tab-btn" data-tab="reviews">Отзывы</button>
+    </nav>
+
+    <main id="content" class="content"></main>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>

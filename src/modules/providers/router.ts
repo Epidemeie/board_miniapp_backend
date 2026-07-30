@@ -1,0 +1,60 @@
+import { Router } from "express";
+import { providersService } from "./service";
+import { adminAuth } from "../../middleware/adminAuth";
+
+export const providersRouter = Router();
+
+providersRouter.get("/", async (req, res, next) => {
+  try {
+    res.json(await providersService.list());
+  } catch (e) {
+    next(e);
+  }
+});
+
+providersRouter.get("/:id", async (req, res, next) => {
+  try {
+    const provider = await providersService.get(Number(req.params.id));
+    if (!provider) return res.status(404).json({ error: "Мастер не найден" });
+    res.json(provider);
+  } catch (e) {
+    next(e);
+  }
+});
+
+export const providersAdminRouter = Router();
+providersAdminRouter.use(adminAuth);
+
+// Админка видит и заблокированных, и неподтверждённых мастеров
+providersAdminRouter.get("/", async (req, res, next) => {
+  try {
+    res.json(await providersService.listAllForAdmin());
+  } catch (e) {
+    next(e);
+  }
+});
+
+providersAdminRouter.post("/", async (req, res, next) => {
+  try {
+    res.json(await providersService.create(req.body));
+  } catch (e) {
+    next(e);
+  }
+});
+
+providersAdminRouter.put("/:id", async (req, res, next) => {
+  try {
+    res.json(await providersService.update(Number(req.params.id), req.body));
+  } catch (e) {
+    next(e);
+  }
+});
+
+providersAdminRouter.delete("/:id", async (req, res, next) => {
+  try {
+    await providersService.remove(Number(req.params.id));
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
