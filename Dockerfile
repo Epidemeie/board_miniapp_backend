@@ -1,5 +1,6 @@
 FROM node:22-alpine AS build
 WORKDIR /app
+RUN apk add --no-cache openssl libssl3
 COPY package*.json ./
 COPY prisma ./prisma
 RUN npm install
@@ -9,6 +10,7 @@ RUN npm run build
 FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl libssl3
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
