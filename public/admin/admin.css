@@ -76,3 +76,26 @@ tr:last-child td { border-bottom: none; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--paper); border: 1px solid var(--line); }
 .link-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 12.5px; padding: 0; }
 .muted { color: var(--muted); font-size: 12px; }
+
+.section-head { margin-top: 28px; }
+.section-head:first-child { margin-top: 0; }
+
+tr.row-clickable { cursor: pointer; }
+tr.row-clickable:hover td { background: var(--paper); }
+.row-action { margin-right: 10px; }
+.row-action.ghost-btn { padding: 4px 10px; font-size: 11.5px; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(20, 22, 26, 0.45);
+  display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50;
+}
+.modal-box {
+  background: var(--card); border-radius: 16px; padding: 20px; width: 100%; max-width: 480px;
+  max-height: 86vh; overflow-y: auto;
+}
+.modal-box h3 { margin: 0 0 14px; font-size: 15px; }
+.modal-box .form-grid { border: none; padding: 0; margin: 0; }
+
+.checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.checkbox-row input { width: auto; }
+.tms-label-inline { font-size: 11.5px; color: var(--muted); margin: 4px 0 -2px; }

@@ -54,7 +54,11 @@ npm run dev                  # http://localhost:3000
 | GET | `/api/services?categoryId=1` | услуги внутри категории |
 | GET | `/api/providers` | список мастеров |
 | GET | `/api/providers/:id` | профиль мастера |
+| GET | `/api/providers/by-telegram/:telegramId` | зарегистрирован ли этот telegramId как мастер |
+| POST | `/api/providers/register` | самостоятельная регистрация мастера из Mini App |
 | POST | `/api/requests` | создать заявку |
+| GET | `/api/requests/open?serviceId=1,2` | лента открытых заявок под услуги мастера |
+| GET | `/api/requests/mine?telegramId=` | заявки клиента + отклики по ним |
 | GET | `/api/requests/:id/candidates` | подобрать мастеров под заявку (алгоритм) |
 | POST | `/api/offers` | мастер отправляет отклик |
 | GET | `/api/offers/request/:requestId` | отклики по заявке |
@@ -64,4 +68,10 @@ npm run dev                  # http://localhost:3000
 
 ## Админ-эндпоинты (Basic Auth)
 
-`/api/admin/categories`, `/api/admin/services`, `/api/admin/providers`, `/api/admin/requests`, `/api/admin/reviews`, `/api/admin/stats` — CRUD + аналитика. UI: `/admin`.
+`/api/admin/categories`, `/api/admin/services`, `/api/admin/providers`, `/api/admin/users`, `/api/admin/requests`, `/api/admin/reviews`, `/api/admin/stats` — CRUD + аналитика. UI: `/admin`.
+
+`/api/admin/providers/:id` и `/api/admin/users/:id` (GET) отдают полную карточку —
+профиль + история (отклики/отзывы у мастера, заявки/отзывы у клиента) — админка
+использует их для детального просмотра на вкладке «Аналитика». PUT позволяет
+редактировать (у мастера — включая набор услуг и районов), DELETE удаляет
+мастера/клиента каскадом (услуги, районы, отклики, отзывы, заявки — см. schema.prisma).

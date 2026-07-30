@@ -52,6 +52,17 @@ providersAdminRouter.get("/", async (req, res, next) => {
   }
 });
 
+// Детальная карточка мастера для админки: статистика и история откликов/отзывов
+providersAdminRouter.get("/:id", async (req, res, next) => {
+  try {
+    const provider = await providersService.getAdminDetail(Number(req.params.id));
+    if (!provider) return res.status(404).json({ error: "Мастер не найден" });
+    res.json(provider);
+  } catch (e) {
+    next(e);
+  }
+});
+
 providersAdminRouter.post("/", async (req, res, next) => {
   try {
     res.json(await providersService.create(req.body));

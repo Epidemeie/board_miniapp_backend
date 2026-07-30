@@ -11,6 +11,7 @@ import { offersRouter } from "./modules/offers/router";
 import { reviewsRouter, reviewsAdminRouter } from "./modules/reviews/router";
 import { authRouter } from "./modules/auth/router";
 import { adminStatsRouter } from "./modules/admin/router";
+import { usersAdminRouter } from "./modules/users/router";
 
 export function createApp() {
   const app = express();
@@ -34,6 +35,7 @@ export function createApp() {
   app.use("/api/admin/providers", providersAdminRouter);
   app.use("/api/admin/requests", requestsAdminRouter);
   app.use("/api/admin/reviews", reviewsAdminRouter);
+  app.use("/api/admin/users", usersAdminRouter);
   app.use("/api/admin", adminStatsRouter);
 
   // ---- Статическая админ-панель (public/admin) ----

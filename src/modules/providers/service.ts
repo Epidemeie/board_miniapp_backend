@@ -33,6 +33,25 @@ export const providersService = {
       include: { user: true, services: { include: { service: true } }, areas: true },
     }),
 
+  // Детальная карточка для админки: статистика и полная история откликов/отзывов
+  getAdminDetail: (id: number) =>
+    prisma.provider.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        services: { include: { service: { include: { category: true } } } },
+        areas: true,
+        offers: {
+          include: { request: { include: { service: true, user: true } } },
+          orderBy: { id: "desc" },
+        },
+        reviews: {
+          include: { user: true },
+          orderBy: { id: "desc" },
+        },
+      },
+    }),
+
   // Ручное добавление мастера из админки (документ явно рекомендует так стартовать)
   create: async (data: {
     telegramId: string;
@@ -69,13 +88,47 @@ export const providersService = {
   update: (
     id: number,
     data: Partial<{
+      name: string;
+      username: string;
       description: string;
       priceFrom: number;
       verified: boolean;
       blocked: boolean;
       responseTimeMin: number;
+      serviceIds: number[];
+      areas: string[];
     }>
-  ) => prisma.provider.update({ where: { id }, data }),
+  ) => {
+    const { name, username, serviceIds, areas, ...providerData } = data;
+    return prisma.$transaction(async (tx) => {
+      if (name !== undefined || username !== undefined) {
+        const provider = await tx.provider.findUniqueOrThrow({ where: { id } });
+        await tx.user.update({
+          where: { id: provider.userId },
+          data: { ...(name !== undefined && { name }), ...(username !== undefined && { username }) },
+        });
+      }
+      if (serviceIds) {
+        await tx.providerService.deleteMany({ where: { providerId: id } });
+        await tx.providerService.createMany({ data: serviceIds.map((serviceId) => ({ providerId: id, serviceId })) });
+      }
+      if (areas) {
+        await tx.providerArea.deleteMany({ where: { providerId: id } });
+        await tx.providerArea.createMany({ data: areas.map((area) => ({ providerId: id, area })) });
+      }
+      return tx.provider.update({
+        where: { id },
+        data: providerData,
+        include: { user: true, services: { include: { service: true } }, areas: true },
+      });
+    });
+  },
 
-  remove: (id: number) => prisma.provider.delete({ where: { id } }),
+  // Каскад в схеме чистит услуги/районы/отклики/отзывы мастера,
+  // но пользователь остаётся — возвращаем ему роль клиента
+  remove: async (id: number) => {
+    const provider = await prisma.provider.delete({ where: { id } });
+    await prisma.user.update({ where: { id: provider.userId }, data: { role: "client" } }).catch(() => {});
+    return provider;
+  },
 };
