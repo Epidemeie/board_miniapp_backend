@@ -95,7 +95,9 @@ model Request {
   urgency     String?
   area        String?
   status      String   @default("open") // open | matched | completed | cancelled
+  archived    Boolean  @default(false) // клиент удалил заявку до выбора мастера — уходит в архив, не в БД-удаление
   createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
   offers  Offer[]
   reviews Review[]

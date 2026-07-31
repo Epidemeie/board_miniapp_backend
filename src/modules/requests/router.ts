@@ -45,6 +45,15 @@ requestsRouter.get("/:id/candidates", async (req, res, next) => {
   }
 });
 
+// Клиент удаляет свою заявку (только пока она открыта) — уходит в архив
+requestsRouter.put("/:id/archive", async (req, res, next) => {
+  try {
+    res.json(await requestsService.archive(Number(req.params.id), String(req.body.telegramId)));
+  } catch (e) {
+    next(e);
+  }
+});
+
 export const requestsAdminRouter = Router();
 requestsAdminRouter.use(adminAuth);
 
@@ -69,6 +78,15 @@ requestsAdminRouter.get("/:id", async (req, res, next) => {
 requestsAdminRouter.put("/:id/status", async (req, res, next) => {
   try {
     res.json(await requestsService.updateStatus(Number(req.params.id), req.body.status));
+  } catch (e) {
+    next(e);
+  }
+});
+
+requestsAdminRouter.delete("/:id", async (req, res, next) => {
+  try {
+    await requestsService.remove(Number(req.params.id));
+    res.json({ ok: true });
   } catch (e) {
     next(e);
   }

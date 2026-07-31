@@ -1,4 +1,4 @@
-const state = { auth: null, categories: [], services: [], tab: "stats", adminDetail: null };
+const state = { auth: null, categories: [], services: [], tab: "stats", adminDetail: null, requestsSubTab: "active", requestDetailId: null };
 
 const $ = (sel) => document.querySelector(sel);
 const content = $("#content");
@@ -74,6 +74,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("is-active"));
     btn.classList.add("is-active");
     state.adminDetail = null;
+    state.requestDetailId = null;
     renderTab(btn.dataset.tab);
   });
 });
@@ -652,27 +653,123 @@ async function renderProviders() {
 // ---------- Заявки ----------
 
 async function renderRequests() {
+  if (state.requestDetailId) return renderRequestDetail(state.requestDetailId);
+
   const requests = await api("/admin/requests");
+  const sub = state.requestsSubTab || "active";
+  const active = requests.filter((r) => !r.archived);
+  const archived = requests.filter((r) => r.archived);
+  const list = sub === "archived" ? archived : active;
+
   content.innerHTML = `
     <div class="section-head"><h2>Заявки</h2></div>
+    <div class="tabs" style="padding: 0; margin-bottom: 14px; border-bottom: none;">
+      <button class="tab-btn ${sub === "active" ? "is-active" : ""}" data-req-sub="active">Активные (${active.length})</button>
+      <button class="tab-btn ${sub === "archived" ? "is-active" : ""}" data-req-sub="archived">Архивные заявки (${archived.length})</button>
+    </div>
     <table>
-      <thead><tr><th>ID</th><th>Клиент</th><th>Услуга</th><th>Район</th><th>Статус</th><th>Откликов</th></tr></thead>
+      <thead><tr><th>ID</th><th>Клиент</th><th>Услуга</th><th>Район</th><th>Статус</th><th>Откликов</th><th>Создана</th></tr></thead>
       <tbody>
-        ${requests
+        ${list
           .map(
-            (r) => `<tr>
+            (r) => `<tr class="row-clickable" data-view-request="${r.id}">
               <td>${r.id}</td>
-              <td>${r.user.name}</td>
-              <td>${r.service.name}</td>
-              <td>${r.area || "—"}</td>
-              <td><span class="badge">${r.status}</span></td>
+              <td>${esc(r.user.name)}</td>
+              <td>${esc(r.service.name)}</td>
+              <td>${esc(r.area) || "—"}</td>
+              <td>${statusBadge(r.status)}</td>
               <td>${r.offers.length}</td>
+              <td>${fmtDate(r.createdAt)}</td>
             </tr>`
           )
           .join("")}
       </tbody>
     </table>
+    ${list.length === 0 ? `<p class="muted">${sub === "archived" ? "Архив пуст." : "Заявок пока нет."}</p>` : ""}
   `;
+
+  document.querySelectorAll("[data-req-sub]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.requestsSubTab = btn.dataset.reqSub;
+      renderTab("requests");
+    });
+  });
+  document.querySelectorAll("[data-view-request]").forEach((row) => {
+    row.addEventListener("click", () => {
+      state.requestDetailId = Number(row.dataset.viewRequest);
+      renderTab("requests");
+    });
+  });
+}
+
+async function renderRequestDetail(id) {
+  const r = await api(`/admin/requests/${id}`);
+  const accepted = r.offers.find((o) => o.status === "accepted");
+
+  content.innerHTML = `
+    <button class="link-btn" id="back-to-requests">← Ко всем заявкам</button>
+    <div class="section-head">
+      <h2>Заявка №${r.id} ${r.archived ? statusBadge("в архиве") : ""}</h2>
+      <div>
+        ${r.status !== "completed" ? `<button class="ghost-btn row-action" id="req-complete">Отметить выполненной</button>` : ""}
+        ${r.status !== "cancelled" ? `<button class="ghost-btn row-action" id="req-cancel">Отменить заявку</button>` : ""}
+        <button class="link-btn" id="req-delete">Удалить</button>
+      </div>
+    </div>
+
+    <table>
+      <tbody>
+        <tr><td>Услуга</td><td>${esc(r.service.name)}</td></tr>
+        <tr><td>Район</td><td>${esc(r.area) || "—"}</td></tr>
+        <tr><td>Срочность</td><td>${esc(r.urgency) || "—"}</td></tr>
+        <tr><td>Бюджет</td><td>${r.budget ? r.budget + " ₾" : "—"}</td></tr>
+        <tr><td>Описание</td><td>${esc(r.description) || "—"}</td></tr>
+        <tr><td>Статус</td><td>${statusBadge(r.status)}</td></tr>
+        <tr><td>Кто сделал</td><td>${esc(r.user.name)}${r.user.username ? " (@" + esc(r.user.username) + ")" : ""}</td></tr>
+        <tr><td>Кто взял</td><td>${accepted ? esc(accepted.provider.user.name) + " · " + accepted.price + " ₾" : "—"}</td></tr>
+        <tr><td>Создана</td><td>${fmtDate(r.createdAt)}</td></tr>
+        <tr><td>Обновлена</td><td>${fmtDate(r.updatedAt)}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="section-head"><h2>История откликов</h2></div>
+    <table>
+      <thead><tr><th>Мастер</th><th>Цена</th><th>Статус</th><th>Комментарий</th><th>Дата</th></tr></thead>
+      <tbody>
+        ${r.offers
+          .map(
+            (o) => `<tr>
+              <td>${esc(o.provider.user.name)}</td>
+              <td>${o.price} ₾</td>
+              <td>${statusBadge(o.status)}</td>
+              <td>${esc(o.comment) || "—"}</td>
+              <td>${fmtDate(o.createdAt)}</td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${r.offers.length === 0 ? '<p class="muted">Откликов пока нет.</p>' : ""}
+  `;
+
+  $("#back-to-requests").addEventListener("click", () => {
+    state.requestDetailId = null;
+    renderTab("requests");
+  });
+  $("#req-complete")?.addEventListener("click", async () => {
+    await api(`/admin/requests/${id}/status`, { method: "PUT", body: JSON.stringify({ status: "completed" }) });
+    renderRequestDetail(id);
+  });
+  $("#req-cancel")?.addEventListener("click", async () => {
+    await api(`/admin/requests/${id}/status`, { method: "PUT", body: JSON.stringify({ status: "cancelled" }) });
+    renderRequestDetail(id);
+  });
+  $("#req-delete").addEventListener("click", async () => {
+    if (!confirm("Удалить заявку целиком? Также удалятся все отклики и отзывы по ней. Это необратимо.")) return;
+    await api(`/admin/requests/${id}`, { method: "DELETE" });
+    state.requestDetailId = null;
+    renderTab("requests");
+  });
 }
 
 // ---------- Отзывы ----------

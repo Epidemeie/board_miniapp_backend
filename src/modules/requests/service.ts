@@ -31,10 +31,11 @@ export const requestsService = {
     });
   },
 
-  // Лента открытых заявок под услуги мастера (мастер может оказывать несколько услуг)
+  // Лента открытых заявок под услуги мастера (мастер может оказывать несколько услуг).
+  // Архивные (удалённые клиентом) заявки сюда не попадают.
   listOpen: (serviceIds: number[]) =>
     prisma.request.findMany({
-      where: { serviceId: { in: serviceIds }, status: "open" },
+      where: { serviceId: { in: serviceIds }, status: "open", archived: false },
       include: { user: true, service: true },
       orderBy: { id: "desc" },
     }),
@@ -86,4 +87,30 @@ export const requestsService = {
   },
 
   updateStatus: (id: number, status: string) => prisma.request.update({ where: { id }, data: { status } }),
+
+  // Клиент «удаляет» свою заявку — только пока она открыта (мастер ещё не выбран).
+  // Это не DELETE: запись остаётся в БД с archived=true и уходит в «Архив заявок»
+  // на фронте и в админке, не участвует в статистике/ленте мастеров.
+  archive: async (id: number, telegramId: string) => {
+    const request = await prisma.request.findUnique({ where: { id }, include: { user: true } });
+    if (!request) {
+      const e: any = new Error("Заявка не найдена");
+      e.status = 404;
+      throw e;
+    }
+    if (request.user.telegramId !== telegramId) {
+      const e: any = new Error("Нет доступа к этой заявке");
+      e.status = 403;
+      throw e;
+    }
+    if (request.status !== "open") {
+      const e: any = new Error("Можно удалить только заявку, к которой ещё не выбран мастер");
+      e.status = 400;
+      throw e;
+    }
+    return prisma.request.update({ where: { id }, data: { archived: true } });
+  },
+
+  // Админка: полное удаление заявки (каскадом — её отклики и отзывы)
+  remove: (id: number) => prisma.request.delete({ where: { id } }),
 };
