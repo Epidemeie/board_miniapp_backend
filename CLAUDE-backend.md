@@ -22,6 +22,13 @@ src/modules/<name>/
 Модули: `categories`, `services`, `providers`, `requests`, `offers`,
 `reviews`, `auth` (Telegram initData), `admin` (аналитика).
 
+Исключение — `src/bot/bot.ts`: Telegram-бот на Telegraf, канал уведомлений
+(заявки/отклики/заказы), без переписки — все ответы короткие и ведут в
+Mini App кнопкой (`MINI_APP_URL`). Не HTTP-модуль (нет router.ts/service.ts,
+не монтируется в `app.ts`), запускается отдельно в `src/index.ts` через
+`startBot()`. Без `TELEGRAM_BOT_TOKEN` просто не стартует (WARN в логах),
+остальной backend продолжает работать.
+
 Правило: **новая функциональность = новый модуль** той же структуры.
 Не сваливать логику в `app.ts` — там только подключение роутеров.
 Публичные роуты монтируются на `/api/<module>`, админские — на
