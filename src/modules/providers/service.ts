@@ -22,7 +22,7 @@ export const providersService = {
         user: true,
         services: { include: { service: true } },
         areas: true,
-        reviews: true,
+        reviews: { include: { user: true }, orderBy: { id: "desc" } },
       },
     }),
 

@@ -17,4 +17,13 @@ export const offersService = {
       where: { requestId },
       include: { provider: { include: { user: true } } },
     }),
+
+  // Отклики конкретного мастера + заявки, на которые он откликался — экран
+  // «Заявки»/«Заказы» в личном кабинете мастера
+  listForProvider: (providerId: number) =>
+    prisma.offer.findMany({
+      where: { providerId },
+      include: { request: { include: { service: true, user: true } } },
+      orderBy: { id: "desc" },
+    }),
 };

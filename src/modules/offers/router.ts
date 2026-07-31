@@ -21,6 +21,15 @@ offersRouter.get("/request/:requestId", async (req, res, next) => {
   }
 });
 
+// Мастер смотрит все свои отклики — экран «Заявки»/«Заказы» в личном кабинете
+offersRouter.get("/mine", async (req, res, next) => {
+  try {
+    res.json(await offersService.listForProvider(Number(req.query.providerId)));
+  } catch (e) {
+    next(e);
+  }
+});
+
 // Клиент выбирает или отклоняет отклик
 offersRouter.put("/:id/respond", async (req, res, next) => {
   try {
