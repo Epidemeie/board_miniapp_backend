@@ -1,4 +1,5 @@
 import { prisma } from "../../db/prisma";
+import { recomputeUserRating } from "../../db/ratings";
 
 // Зеркало reviewsService в обратную сторону: мастер оценивает клиента после
 // завершения заказа. В отличие от reviewsService.create, здесь не нужен
@@ -49,5 +50,11 @@ export const clientReviewsService = {
       orderBy: { id: "desc" },
     }),
 
-  remove: (id: number) => prisma.clientReview.delete({ where: { id } }),
+  // Симметрично reviewsService.remove — пересчитываем рейтинг клиента
+  // после удаления, иначе он остаётся «зависшим».
+  remove: async (id: number) => {
+    const deleted = await prisma.clientReview.delete({ where: { id } });
+    await recomputeUserRating(deleted.userId);
+    return deleted;
+  },
 };

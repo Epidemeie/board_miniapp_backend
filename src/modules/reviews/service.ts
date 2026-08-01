@@ -1,4 +1,5 @@
 import { prisma } from "../../db/prisma";
+import { recomputeProviderRating } from "../../db/ratings";
 
 export const reviewsService = {
   create: async (data: {
@@ -59,5 +60,11 @@ export const reviewsService = {
       orderBy: { id: "desc" },
     }),
 
-  remove: (id: number) => prisma.review.delete({ where: { id } }),
+  // Удаление отзыва (модерация) должно пересчитать рейтинг мастера —
+  // иначе он «зависает» на старом значении, хотя отзывов за ним уже нет.
+  remove: async (id: number) => {
+    const deleted = await prisma.review.delete({ where: { id } });
+    await recomputeProviderRating(deleted.providerId);
+    return deleted;
+  },
 };

@@ -816,6 +816,12 @@ async function renderRequestDetail(id) {
 async function renderReviews() {
   const [reviews, clientReviews] = await Promise.all([api("/admin/reviews"), api("/admin/client-reviews")]);
   content.innerHTML = `
+    <div class="section-head">
+      <h2>Отзывы</h2>
+      <button class="ghost-btn" id="recompute-ratings">Пересчитать все рейтинги</button>
+    </div>
+    <p class="muted">На случай, если рейтинг мастера или клиента «завис» на старом значении после удаления отзыва — пересчитывает рейтинги всех мастеров и клиентов заново по фактическим отзывам.</p>
+
     <div class="section-head"><h2>Отзывы о мастерах (от клиентов)</h2></div>
     <table>
       <thead><tr><th>ID</th><th>Мастер</th><th>Клиент</th><th>Оценка</th><th>Текст</th><th>Дата</th><th></th></tr></thead>
@@ -858,6 +864,12 @@ async function renderReviews() {
     </table>
     ${clientReviews.length === 0 ? '<p class="muted">Отзывов пока нет.</p>' : ""}
   `;
+
+  $("#recompute-ratings").addEventListener("click", async () => {
+    const res = await api("/admin/recompute-ratings", { method: "POST" });
+    alert(`Готово: пересчитано мастеров — ${res.providers}, клиентов — ${res.users}.`);
+    renderReviews();
+  });
 
   document.querySelectorAll("[data-del-review]").forEach((btn) => {
     btn.addEventListener("click", async () => {

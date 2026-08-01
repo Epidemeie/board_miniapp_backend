@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../../db/prisma";
 import { adminAuth } from "../../middleware/adminAuth";
+import { recomputeProviderRating, recomputeUserRating } from "../../db/ratings";
 
 export const adminStatsRouter = Router();
 adminStatsRouter.use(adminAuth);
@@ -30,6 +31,28 @@ adminStatsRouter.get("/stats", async (req, res, next) => {
         requestToOrder: requests ? Math.round((requestsMatched / requests) * 100) : 0,
       },
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Ручной пересчёт рейтингов всех мастеров и клиентов — на случай, если
+// где-то в прошлом отзыв удалился (напрямую или каскадом при удалении
+// заявки), а рейтинг остался «зависшим» на старом значении. Сама точка
+// удаления отзыва теперь пересчитывает рейтинг сразу (см. reviewsService,
+// clientReviewsService, requestsService.remove) — это разовая починка
+// уже накопленного расхождения, не то, что должно вызываться регулярно.
+adminStatsRouter.post("/recompute-ratings", async (req, res, next) => {
+  try {
+    const [providers, users] = await Promise.all([
+      prisma.provider.findMany({ select: { id: true } }),
+      prisma.user.findMany({ select: { id: true } }),
+    ]);
+    await Promise.all([
+      ...providers.map((p) => recomputeProviderRating(p.id)),
+      ...users.map((u) => recomputeUserRating(u.id)),
+    ]);
+    res.json({ ok: true, providers: providers.length, users: users.length });
   } catch (e) {
     next(e);
   }

@@ -1,5 +1,6 @@
 import { prisma } from "../../db/prisma";
 import { scoreProvider } from "./matching";
+import { recomputeProviderRating, recomputeUserRating } from "../../db/ratings";
 
 export const requestsService = {
   // Клиент создаёт заявку — авторизуется по telegramId (см. модуль auth)
@@ -112,6 +113,20 @@ export const requestsService = {
     return prisma.request.update({ where: { id }, data: { archived: true } });
   },
 
-  // Админка: полное удаление заявки (каскадом — её отклики и отзывы)
-  remove: (id: number) => prisma.request.delete({ where: { id } }),
+  // Админка: полное удаление заявки (каскадом — её отклики и отзывы в обе
+  // стороны). Каскад в базе сам вычистит строки отзывов, но не пересчитает
+  // рейтинги мастера/клиента, которых они касались — поэтому берём
+  // затронутые providerId/userId до удаления и пересчитываем после.
+  remove: async (id: number) => {
+    const [reviews, clientReviews] = await Promise.all([
+      prisma.review.findMany({ where: { requestId: id }, select: { providerId: true } }),
+      prisma.clientReview.findMany({ where: { requestId: id }, select: { userId: true } }),
+    ]);
+    const deleted = await prisma.request.delete({ where: { id } });
+    await Promise.all([
+      ...reviews.map((r) => recomputeProviderRating(r.providerId)),
+      ...clientReviews.map((r) => recomputeUserRating(r.userId)),
+    ]);
+    return deleted;
+  },
 };
