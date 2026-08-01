@@ -32,10 +32,11 @@ export const requestsService = {
   },
 
   // Лента открытых заявок под услуги мастера (мастер может оказывать несколько услуг).
-  // Архивные (удалённые клиентом) заявки сюда не попадают.
+  // Архивные (удалённые клиентом) заявки сюда не попадают, как и заявки от
+  // клиентов, деактивировавших аккаунт (user.active — см. usersService.deactivate).
   listOpen: (serviceIds: number[]) =>
     prisma.request.findMany({
-      where: { serviceId: { in: serviceIds }, status: "open", archived: false },
+      where: { serviceId: { in: serviceIds }, status: "open", archived: false, user: { active: true } },
       include: { user: true, service: true },
       orderBy: { id: "desc" },
     }),
@@ -73,7 +74,7 @@ export const requestsService = {
     if (!request) return null;
 
     const candidates = await prisma.provider.findMany({
-      where: { blocked: false, services: { some: { serviceId: request.serviceId } } },
+      where: { blocked: false, active: true, services: { some: { serviceId: request.serviceId } } },
       include: { user: true, areas: true, services: true },
     });
 

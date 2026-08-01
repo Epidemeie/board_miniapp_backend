@@ -18,6 +18,7 @@ model User {
   entryRole   String?  @map("entry_role") // client | provider | null — ещё не выбран; экран role показывать, пока null
   rating      Float    @default(0) // рейтинг клиента — считается по ClientReview (отзывы от мастеров)
   reviewCount Int      @default(0) @map("review_count")
+  active      Boolean  @default(true) // «мягкое удаление» аккаунта клиентом — профиль и рейтинг сохраняются, см. usersService.deactivate
   createdAt   DateTime @default(now()) @map("created_at")
 
   provider      Provider?
@@ -38,7 +39,8 @@ model Provider {
   reviewCount     Int      @default(0) @map("review_count")
   responseTimeMin Int      @default(30) @map("response_time_min")
   verified        Boolean  @default(false)
-  blocked         Boolean  @default(false)
+  blocked         Boolean  @default(false) // модерация админом — не путать с active (самостоятельное отключение мастером)
+  active          Boolean  @default(true) // «мягкое удаление» профиля мастером, см. providersService.deactivate
   createdAt       DateTime @default(now()) @map("created_at")
 
   services      ProviderService[]

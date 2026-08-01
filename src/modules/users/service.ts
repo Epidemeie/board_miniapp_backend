@@ -12,13 +12,19 @@ export const usersService = {
     return { language: user?.language ?? null, entryRole: user?.entryRole ?? null };
   },
 
-  setPrefs: (data: { telegramId: string; name: string; username?: string; language?: string; entryRole?: string }) => {
+  // Выбор роли (entryRole) на экране role или в настройках — это и есть
+  // момент, когда пользователь «возвращается» в приложение: если до этого
+  // он деактивировал профиль кнопкой «Удалить аккаунт», здесь он тихо
+  // реактивируется (active: true), без отдельной кнопки «восстановить».
+  // Для роли provider заодно реактивируем и связанный Provider — иначе
+  // мастер выбрал бы «Я мастер», но его карточка так и осталась бы скрыта.
+  setPrefs: async (data: { telegramId: string; name: string; username?: string; language?: string; entryRole?: string }) => {
     const { telegramId, name, username, language, entryRole } = data;
-    return prisma.user.upsert({
+    const user = await prisma.user.upsert({
       where: { telegramId },
       update: {
         ...(language !== undefined && { language }),
-        ...(entryRole !== undefined && { entryRole }),
+        ...(entryRole !== undefined && { entryRole, active: true }),
       },
       create: {
         telegramId,
@@ -28,7 +34,18 @@ export const usersService = {
         ...(entryRole !== undefined && { entryRole }),
       },
     });
+    if (entryRole === "provider") {
+      await prisma.provider.updateMany({ where: { userId: user.id }, data: { active: true } });
+    }
+    return user;
   },
+
+  // Клиент нажал «Удалить аккаунт» — профиль и рейтинг остаются в базе
+  // (иначе перерегистрация с тем же telegramId обнулила бы историю), но
+  // скрываются из выдачи (см. requestsService.listOpen). entryRole сбрасываем
+  // в null, чтобы при следующем открытии показался экран выбора роли, а не
+  // автовход в уже «удалённый» кабинет — см. useEffect в начале App.jsx.
+  deactivate: (telegramId: string) => prisma.user.update({ where: { telegramId }, data: { active: false, entryRole: null } }),
 
   // Публичный профиль клиента для Mini App — симметрично
   // providersService.getByTelegramId/get: лёгкая проверка по telegramId,

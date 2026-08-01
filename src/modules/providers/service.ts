@@ -1,10 +1,11 @@
 import { prisma } from "../../db/prisma";
 
 export const providersService = {
-  // Публичный список — только не заблокированные, для отображения в Mini App
+  // Публичный список — только не заблокированные и не деактивированные
+  // самим мастером, для отображения в Mini App
   list: () =>
     prisma.provider.findMany({
-      where: { blocked: false },
+      where: { blocked: false, active: true },
       include: { user: true, services: { include: { service: true } }, areas: true },
       orderBy: { rating: "desc" },
     }),
@@ -26,10 +27,14 @@ export const providersService = {
       },
     }),
 
-  // Фронтенд проверяет этим, зарегистрирован ли открывший Mini App как мастер
+  // Фронтенд проверяет этим, зарегистрирован ли открывший Mini App как
+  // мастер. active: true — деактивированный (см. deactivate) мастер для
+  // этой проверки как будто не зарегистрирован; реактивация происходит в
+  // usersService.setPrefs при повторном выборе роли «мастер», не здесь
+  // (GET не должен иметь побочных эффектов).
   getByTelegramId: (telegramId: string) =>
     prisma.provider.findFirst({
-      where: { user: { telegramId } },
+      where: { user: { telegramId }, active: true },
       include: { user: true, services: { include: { service: true } }, areas: true },
     }),
 
@@ -94,6 +99,7 @@ export const providersService = {
       priceFrom: number;
       verified: boolean;
       blocked: boolean;
+      active: boolean;
       responseTimeMin: number;
       serviceIds: number[];
       areas: string[];
@@ -130,5 +136,29 @@ export const providersService = {
     const provider = await prisma.provider.delete({ where: { id } });
     await prisma.user.update({ where: { id: provider.userId }, data: { role: "client" } }).catch(() => {});
     return provider;
+  },
+
+  // Мастер нажал «Удалить аккаунт» — мягкое удаление (см. remove() выше для
+  // настоящего, только из админки): анкета, услуги, районы, рейтинг и
+  // отзывы остаются в базе, но профиль пропадает из публичного списка и
+  // подбора (list/matchCandidates). telegramId в теле запроса — проверка,
+  // что деактивирует именно владелец профиля, как в requestsService.archive.
+  deactivate: async (id: number, telegramId: string) => {
+    const provider = await prisma.provider.findUnique({ where: { id }, include: { user: true } });
+    if (!provider) {
+      const e: any = new Error("Мастер не найден");
+      e.status = 404;
+      throw e;
+    }
+    if (provider.user.telegramId !== telegramId) {
+      const e: any = new Error("Нет доступа к этому профилю");
+      e.status = 403;
+      throw e;
+    }
+    const updated = await prisma.provider.update({ where: { id }, data: { active: false } });
+    // Сбрасываем entryRole, чтобы при следующем открытии показался экран
+    // выбора роли, а не автовход в уже «удалённый» кабинет мастера.
+    await prisma.user.update({ where: { id: provider.userId }, data: { entryRole: null } });
+    return updated;
   },
 };

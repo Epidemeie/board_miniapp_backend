@@ -25,6 +25,18 @@ usersRouter.put("/prefs", async (req, res, next) => {
   }
 });
 
+// Клиент удаляет свой аккаунт — мягко (см. usersService.deactivate):
+// профиль и рейтинг сохраняются, реактивация происходит автоматически
+// при следующем выборе роли «клиент» (см. setPrefs выше).
+usersRouter.put("/deactivate", async (req, res, next) => {
+  try {
+    await usersService.deactivate(req.body.telegramId);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // Публичный профиль клиента (рейтинг + отзывы от мастеров) — симметрично
 // providersRouter.get("/by-telegram/:telegramId") и providersRouter.get("/:id").
 usersRouter.get("/by-telegram/:telegramId", async (req, res, next) => {

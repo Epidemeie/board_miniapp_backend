@@ -40,6 +40,15 @@ providersRouter.get("/:id", async (req, res, next) => {
   }
 });
 
+// Мастер удаляет свой профиль — мягко, см. providersService.deactivate
+providersRouter.put("/:id/deactivate", async (req, res, next) => {
+  try {
+    res.json(await providersService.deactivate(Number(req.params.id), req.body.telegramId));
+  } catch (e) {
+    next(e);
+  }
+});
+
 export const providersAdminRouter = Router();
 providersAdminRouter.use(adminAuth);
 

@@ -106,6 +106,14 @@ function statusBadge(status) {
   return `<span class="badge">${esc(status)}</span>`;
 }
 
+// blocked — модерация админом, active === false — мастер сам нажал
+// «Удалить аккаунт» (мягкое удаление, см. providersService.deactivate).
+function providerStatusLabel(p) {
+  if (p.blocked) return "заблокирован";
+  if (p.active === false) return "деактивирован (удалил себя)";
+  return p.verified ? "подтверждён" : "новый";
+}
+
 async function renderStats() {
   if (state.adminDetail) {
     return state.adminDetail.type === "provider"
@@ -138,7 +146,7 @@ async function renderStats() {
               <td>${p.services.map((s) => esc(s.service.name)).join(", ") || "—"}</td>
               <td>${p.areas.map((a) => esc(a.area)).join(", ") || "—"}</td>
               <td>${p.rating.toFixed(1)} (${p.reviewCount})</td>
-              <td>${statusBadge(p.blocked ? "заблокирован" : p.verified ? "подтверждён" : "новый")}</td>
+              <td>${statusBadge(providerStatusLabel(p))}</td>
               <td>
                 <button class="ghost-btn row-action" data-edit-provider="${p.id}">Изменить</button>
                 <button class="link-btn row-action" data-del-provider="${p.id}">Удалить</button>
@@ -152,7 +160,7 @@ async function renderStats() {
 
     <div class="section-head"><h2>Клиенты (${clients.length})</h2></div>
     <table>
-      <thead><tr><th>ID</th><th>Имя</th><th>Username</th><th>Заявок</th><th>Отзывов оставлено</th><th>Рейтинг клиента</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Имя</th><th>Username</th><th>Заявок</th><th>Отзывов оставлено</th><th>Рейтинг клиента</th><th>Статус</th><th></th></tr></thead>
       <tbody>
         ${clients
           .map(
@@ -163,6 +171,7 @@ async function renderStats() {
               <td>${c._count.requests}</td>
               <td>${c._count.reviews}</td>
               <td>${c._count.clientReviews ? `★ ${c.rating.toFixed(1)} (${c._count.clientReviews})` : "—"}</td>
+              <td>${statusBadge(c.active === false ? "деактивирован (удалил себя)" : "активен")}</td>
               <td>
                 <button class="ghost-btn row-action" data-edit-client="${c.id}">Изменить</button>
                 <button class="link-btn row-action" data-del-client="${c.id}">Удалить</button>
@@ -251,7 +260,7 @@ async function renderProviderDetail(id) {
         <tr><td>Районы</td><td>${p.areas.map((a) => esc(a.area)).join(", ") || "—"}</td></tr>
         <tr><td>Цена от</td><td>${p.priceFrom ? p.priceFrom + " ₾" : "—"}</td></tr>
         <tr><td>О себе</td><td>${esc(p.description) || "—"}</td></tr>
-        <tr><td>Статус</td><td>${statusBadge(p.blocked ? "заблокирован" : p.verified ? "подтверждён" : "новый")}</td></tr>
+        <tr><td>Статус</td><td>${statusBadge(providerStatusLabel(p))}</td></tr>
         <tr><td>Зарегистрирован</td><td>${fmtDate(p.createdAt)}</td></tr>
       </tbody>
     </table>
@@ -331,6 +340,7 @@ async function renderClientDetail(id) {
       <tbody>
         <tr><td>Telegram ID</td><td>${esc(c.telegramId)}</td></tr>
         <tr><td>Username</td><td>${c.username ? "@" + esc(c.username) : "—"}</td></tr>
+        <tr><td>Статус</td><td>${statusBadge(c.active === false ? "деактивирован (удалил себя)" : "активен")}</td></tr>
         <tr><td>Регистрация</td><td>${fmtDate(c.createdAt)}</td></tr>
       </tbody>
     </table>
@@ -632,7 +642,7 @@ async function renderProviders() {
               <td>${p.areas.map((a) => a.area).join(", ")}</td>
               <td>${p.rating.toFixed(1)} (${p.reviewCount})</td>
               <td>
-                <span class="badge">${p.blocked ? "заблокирован" : p.verified ? "подтверждён" : "новый"}</span>
+                <span class="badge">${providerStatusLabel(p)}</span>
               </td>
               <td>
                 ${
