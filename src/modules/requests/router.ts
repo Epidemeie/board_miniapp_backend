@@ -19,7 +19,8 @@ requestsRouter.get("/open", async (req, res, next) => {
       .split(",")
       .map(Number)
       .filter((n) => !Number.isNaN(n));
-    res.json(await requestsService.listOpen(serviceIds));
+    const telegramId = req.query.telegramId ? String(req.query.telegramId) : undefined;
+    res.json(await requestsService.listOpen(serviceIds, telegramId));
   } catch (e) {
     next(e);
   }

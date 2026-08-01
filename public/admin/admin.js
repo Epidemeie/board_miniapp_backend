@@ -89,6 +89,7 @@ async function renderTab(tab) {
     if (tab === "providers") return await renderProviders();
     if (tab === "requests") return await renderRequests();
     if (tab === "reviews") return await renderReviews();
+    if (tab === "monetization") return await renderMonetization();
   } catch (e) {
     content.innerHTML = `<p class="error">${e.message}</p>`;
   }
@@ -112,6 +113,15 @@ function providerStatusLabel(p) {
   if (p.blocked) return "заблокирован";
   if (p.active === false) return "деактивирован (удалил себя)";
   return p.verified ? "подтверждён" : "новый";
+}
+
+// Тариф — считаем на лету так же, как getEffectiveTier на бэкенде: pro
+// только если явно выставлен И срок ещё не истёк, иначе показываем Free.
+function isEffectivelyPro(p) {
+  return p.tier === "pro" && p.tierUntil && new Date(p.tierUntil).getTime() > Date.now();
+}
+function tierLabel(p) {
+  return isEffectivelyPro(p) ? `Pro до ${fmtDate(p.tierUntil)}` : "Free";
 }
 
 async function renderStats() {
@@ -884,6 +894,134 @@ async function renderReviews() {
       await api(`/admin/client-reviews/${btn.dataset.delClientReview}`, { method: "DELETE" });
       renderReviews();
     });
+  });
+}
+
+// ---------- Монетизация ----------
+
+async function renderMonetization() {
+  const [providers, stats, transactions] = await Promise.all([
+    api("/admin/providers"),
+    api("/admin/stats"),
+    api("/admin/subscriptions/transactions"),
+  ]);
+
+  const proCount = providers.filter(isEffectivelyPro).length;
+  const freeCount = providers.length - proCount;
+  const avgOffers = providers.length ? (stats.offers / providers.length).toFixed(1) : "0";
+
+  content.innerHTML = `
+    <div class="section-head"><h2>Монетизация</h2></div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="value">${stats.offers}</div><div class="label">Откликов всего</div></div>
+      <div class="stat-card"><div class="value">${avgOffers}</div><div class="label">Среднее откликов на мастера</div></div>
+      <div class="stat-card"><div class="value">${freeCount}</div><div class="label">Free</div></div>
+      <div class="stat-card"><div class="value">${proCount}</div><div class="label">Pro</div></div>
+    </div>
+
+    <div class="section-head"><h2>Мастера — тариф и баланс</h2></div>
+    <table>
+      <thead><tr><th>ID</th><th>Имя</th><th>Тариф</th><th>Баланс</th><th></th></tr></thead>
+      <tbody>
+        ${providers
+          .map(
+            (p) => `<tr>
+              <td>${p.id}</td>
+              <td>${esc(p.user.name)}</td>
+              <td>${statusBadge(tierLabel(p))}</td>
+              <td>${p.balance} ₾</td>
+              <td>
+                <button class="ghost-btn row-action" data-topup="${p.id}">Начислить баланс</button>
+                <button class="ghost-btn row-action" data-give-pro="${p.id}">Выдать Pro</button>
+              </td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${providers.length === 0 ? '<p class="muted">Мастеров пока нет.</p>' : ""}
+
+    <div class="section-head"><h2>Журнал транзакций</h2></div>
+    <table>
+      <thead><tr><th>Дата</th><th>Мастер</th><th>Тип</th><th>Сумма</th><th>Комментарий</th></tr></thead>
+      <tbody>
+        ${transactions
+          .map(
+            (t) => `<tr>
+              <td>${fmtDate(t.createdAt)}</td>
+              <td>${t.provider ? esc(t.provider.user.name) : "—"}</td>
+              <td>${esc(transactionTypeLabel(t.type))}</td>
+              <td>${t.amount > 0 ? "+" : ""}${t.amount} ₾</td>
+              <td>${esc(t.comment) || "—"}</td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${transactions.length === 0 ? '<p class="muted">Транзакций пока нет.</p>' : ""}
+  `;
+
+  document.querySelectorAll("[data-topup]").forEach((btn) => {
+    btn.addEventListener("click", () => openTopUpModal(Number(btn.dataset.topup)));
+  });
+  document.querySelectorAll("[data-give-pro]").forEach((btn) => {
+    btn.addEventListener("click", () => openGiveProModal(Number(btn.dataset.givePro)));
+  });
+}
+
+function transactionTypeLabel(type) {
+  return { topup: "пополнение", subscription: "подписка", lead: "списание за лид", refund: "возврат" }[type] || type;
+}
+
+function openTopUpModal(providerId) {
+  showModal(`
+    <h3>Начислить баланс</h3>
+    <div class="form-grid">
+      <input id="topup-amount" type="number" min="1" step="1" placeholder="Сумма, ₾" />
+      <input id="topup-comment" class="full" placeholder="Комментарий (например, причина начисления)" />
+      <button class="ghost-btn" id="topup-cancel">Отмена</button>
+      <button class="primary-btn" id="topup-save">Начислить</button>
+    </div>
+  `);
+
+  $("#topup-cancel").addEventListener("click", closeModal);
+  $("#topup-save").addEventListener("click", async () => {
+    const amount = Number($("#topup-amount").value);
+    if (!Number.isInteger(amount) || amount <= 0) return alert("Сумма должна быть положительным целым числом");
+    try {
+      await api("/admin/subscriptions/topup", {
+        method: "POST",
+        body: JSON.stringify({ providerId, amount, comment: $("#topup-comment").value.trim() || undefined }),
+      });
+      closeModal();
+      renderTab("monetization");
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+}
+
+function openGiveProModal(providerId) {
+  showModal(`
+    <h3>Выдать Pro</h3>
+    <div class="form-grid">
+      <input id="pro-months" type="number" min="1" step="1" placeholder="На сколько месяцев" value="1" />
+      <button class="ghost-btn" id="pro-cancel">Отмена</button>
+      <button class="primary-btn" id="pro-save">Выдать</button>
+    </div>
+  `);
+
+  $("#pro-cancel").addEventListener("click", closeModal);
+  $("#pro-save").addEventListener("click", async () => {
+    const months = Number($("#pro-months").value);
+    if (!Number.isInteger(months) || months <= 0) return alert("Количество месяцев должно быть положительным целым числом");
+    try {
+      await api("/admin/subscriptions/pro", { method: "POST", body: JSON.stringify({ providerId, months }) });
+      closeModal();
+      renderTab("monetization");
+    } catch (e) {
+      alert(e.message);
+    }
   });
 }
 

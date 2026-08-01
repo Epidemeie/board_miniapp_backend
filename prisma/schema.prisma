@@ -41,6 +41,9 @@ model Provider {
   verified        Boolean  @default(false)
   blocked         Boolean  @default(false) // модерация админом — не путать с active (самостоятельное отключение мастером)
   active          Boolean  @default(true) // «мягкое удаление» профиля мастером, см. providersService.deactivate
+  tier            String   @default("free") // free | pro — см. subscriptionsService.getEffectiveTier, тариф напрямую не читать
+  tierUntil       DateTime? @map("tier_until") // до какой даты активен pro; null/прошлое — эффективно free
+  balance         Int      @default(0) // баланс в целых лари, не может уходить в минус
   createdAt       DateTime @default(now()) @map("created_at")
 
   services      ProviderService[]
@@ -48,6 +51,8 @@ model Provider {
   offers        Offer[]
   reviews       Review[] // отзывы клиентов об этом мастере
   clientReviews ClientReview[] // отзывы, которые этот мастер оставил клиентам
+  leadCharges   LeadCharge[]
+  transactions  Transaction[]
 
   @@map("providers")
 }
@@ -110,6 +115,7 @@ model Request {
   offers        Offer[]
   reviews       Review[]
   clientReviews ClientReview[]
+  charges       LeadCharge[]
 
   @@map("requests")
 }
@@ -160,4 +166,40 @@ model ClientReview {
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("client_reviews")
+}
+
+// Списание за отклик на конкретную заявку — ровно одно на пару (мастер, заявка),
+// см. subscriptionsService.chargeLead. providerId/requestId — SetNull, не Cascade:
+// это финансовая/аналитическая история, обязана пережить настоящее удаление
+// мастера или заявки через админку (DELETE /api/admin/providers|requests/:id),
+// а не блокировать его и не исчезать вместе с ним.
+model LeadCharge {
+  id         Int       @id @default(autoincrement())
+  providerId Int?      @map("provider_id")
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  requestId  Int?      @map("request_id")
+  request    Request?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  amount     Int // сколько списали, в целых лари (0 — пока цены нулевые)
+  tier       String // тариф на момент списания, для аналитики
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@unique([providerId, requestId])
+  @@map("lead_charges")
+}
+
+// Журнал движения денег мастера — единственный источник истины по балансу,
+// см. раздел «Известные грабли» про рейтинги: та же логика, любое изменение
+// баланса обязано сопровождаться записью сюда. providerId — SetNull, не
+// Cascade: журнал обязан пережить настоящее удаление Provider через админку.
+model Transaction {
+  id         Int       @id @default(autoincrement())
+  providerId Int?      @map("provider_id")
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  type       String // topup | subscription | lead | refund
+  amount     Int // со знаком: плюс приход, минус расход, в целых лари
+  externalId String?   @map("external_id") // id платежа во внешней системе, на будущее
+  comment    String? // для ручных операций админа
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@map("transactions")
 }

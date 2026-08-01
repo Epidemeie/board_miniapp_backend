@@ -1,8 +1,15 @@
 import { prisma } from "../../db/prisma";
+import { subscriptionsService } from "../subscriptions/service";
 
 export const offersService = {
+  // Списание за лид и создание отклика — одной транзакцией: если списание
+  // упало (нехватка средств) или отклик не создался — откатывается всё,
+  // не бывает ситуации «деньги списали, отклик не появился».
   create: (data: { requestId: number; providerId: number; price: number; comment?: string }) =>
-    prisma.offer.create({ data }),
+    prisma.$transaction(async (tx) => {
+      await subscriptionsService.chargeLead(data.providerId, data.requestId, tx);
+      return tx.offer.create({ data });
+    }),
 
   respond: async (id: number, status: "accepted" | "declined") => {
     const offer = await prisma.offer.update({ where: { id }, data: { status } });

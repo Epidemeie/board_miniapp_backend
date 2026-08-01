@@ -1,6 +1,8 @@
 import { prisma } from "../../db/prisma";
 import { scoreProvider } from "./matching";
 import { recomputeProviderRating, recomputeUserRating } from "../../db/ratings";
+import { getEffectiveTier } from "../subscriptions/service";
+import { PRICING } from "../subscriptions/pricing";
 
 export const requestsService = {
   // Клиент создаёт заявку — авторизуется по telegramId (см. модуль auth)
@@ -35,12 +37,31 @@ export const requestsService = {
   // Лента открытых заявок под услуги мастера (мастер может оказывать несколько услуг).
   // Архивные (удалённые клиентом) заявки сюда не попадают, как и заявки от
   // клиентов, деактивировавших аккаунт (user.active — см. usersService.deactivate).
-  listOpen: (serviceIds: number[]) =>
-    prisma.request.findMany({
-      where: { serviceId: { in: serviceIds }, status: "open", archived: false, user: { active: true } },
+  // telegramId — опционален: если передан и мастер найден, Free-тариф не
+  // видит заявки младше earlyAccessDelayMin минут (Pro видит сразу). Без
+  // telegramId или для незарегистрированного мастера — без задержки.
+  listOpen: async (serviceIds: number[], telegramId?: string) => {
+    let earlyAccessDelayMin = 0;
+    if (telegramId) {
+      const provider = await prisma.provider.findFirst({ where: { user: { telegramId } } });
+      if (provider) {
+        earlyAccessDelayMin = PRICING[getEffectiveTier(provider)].earlyAccessDelayMin;
+      }
+    }
+    const createdBefore = earlyAccessDelayMin > 0 ? new Date(Date.now() - earlyAccessDelayMin * 60_000) : undefined;
+
+    return prisma.request.findMany({
+      where: {
+        serviceId: { in: serviceIds },
+        status: "open",
+        archived: false,
+        user: { active: true },
+        ...(createdBefore && { createdAt: { lte: createdBefore } }),
+      },
       include: { user: true, service: true },
       orderBy: { id: "desc" },
-    }),
+    });
+  },
 
   // Заявки клиента + отклики по ним — экран «Мои заявки»
   listMine: (telegramId: string) =>
@@ -80,10 +101,15 @@ export const requestsService = {
     });
 
     return candidates
-      .map((provider) => ({
-        provider,
-        ...scoreProvider(provider, { area: request.area, budget: request.budget }),
-      }))
+      .map((provider) => {
+        const { overall, breakdown } = scoreProvider(provider, { area: request.area, budget: request.budget });
+        // Буст по тарифу применяется к итоговому скору, веса алгоритма
+        // (см. MATCH_WEIGHTS) не трогаем — так Pro-мастер получает
+        // преимущество, но не обгоняет по-настоящему более подходящего
+        // мастера. tier/tierUntil уже загружены в candidates — доп. запроса нет.
+        const boost = PRICING[getEffectiveTier(provider)].matchBoost;
+        return { provider, overall: Math.min(100, Math.round(overall * boost)), breakdown };
+      })
       .sort((a, b) => b.overall - a.overall)
       .slice(0, limit);
   },
