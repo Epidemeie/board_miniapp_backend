@@ -808,16 +808,17 @@ async function renderReviews() {
   content.innerHTML = `
     <div class="section-head"><h2>Отзывы о мастерах (от клиентов)</h2></div>
     <table>
-      <thead><tr><th>ID</th><th>Мастер</th><th>Клиент</th><th>Оценка</th><th>Теги</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Мастер</th><th>Клиент</th><th>Оценка</th><th>Текст</th><th>Дата</th><th></th></tr></thead>
       <tbody>
         ${reviews
           .map(
             (r) => `<tr>
               <td>${r.id}</td>
-              <td>${r.provider.user.name}</td>
-              <td>${r.user.name}</td>
+              <td>${esc(r.provider.user.name)}</td>
+              <td>${esc(r.user.name)}</td>
               <td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td>
-              <td>${(r.tags || []).join(", ")}</td>
+              <td>${esc(r.text) || "—"}</td>
+              <td>${fmtDate(r.createdAt)}</td>
               <td><button class="link-btn" data-del-review="${r.id}">Удалить</button></td>
             </tr>`
           )
@@ -828,16 +829,17 @@ async function renderReviews() {
 
     <div class="section-head"><h2>Отзывы о клиентах (от мастеров)</h2></div>
     <table>
-      <thead><tr><th>ID</th><th>Клиент</th><th>Мастер</th><th>Оценка</th><th>Теги</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Клиент</th><th>Мастер</th><th>Оценка</th><th>Текст</th><th>Дата</th><th></th></tr></thead>
       <tbody>
         ${clientReviews
           .map(
             (r) => `<tr>
               <td>${r.id}</td>
-              <td>${r.user.name}</td>
-              <td>${r.provider.user.name}</td>
+              <td>${esc(r.user.name)}</td>
+              <td>${esc(r.provider.user.name)}</td>
               <td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td>
-              <td>${(r.tags || []).join(", ")}</td>
+              <td>${esc(r.text) || "—"}</td>
+              <td>${fmtDate(r.createdAt)}</td>
               <td><button class="link-btn" data-del-client-review="${r.id}">Удалить</button></td>
             </tr>`
           )
