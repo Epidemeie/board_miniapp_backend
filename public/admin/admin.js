@@ -90,6 +90,7 @@ async function renderTab(tab) {
     if (tab === "requests") return await renderRequests();
     if (tab === "reviews") return await renderReviews();
     if (tab === "monetization") return await renderMonetization();
+    if (tab === "support") return await renderSupport();
   } catch (e) {
     content.innerHTML = `<p class="error">${e.message}</p>`;
   }
@@ -1023,6 +1024,34 @@ function openGiveProModal(providerId) {
       alert(e.message);
     }
   });
+}
+
+// ---------- Поддержка ----------
+
+async function renderSupport() {
+  const tickets = await api("/admin/support");
+
+  content.innerHTML = `
+    <div class="section-head"><h2>Обращения в поддержку (${tickets.length})</h2></div>
+    <table>
+      <thead><tr><th>№</th><th>От кого</th><th>Роль</th><th>Тема</th><th>Текст</th><th>Дата</th></tr></thead>
+      <tbody>
+        ${tickets
+          .map(
+            (t) => `<tr>
+              <td>${t.id}</td>
+              <td>${esc(t.name)}${t.username ? " (@" + esc(t.username) + ")" : ""}</td>
+              <td>${t.role === "provider" ? "мастер" : "клиент"}</td>
+              <td>${esc(t.subject) || "—"}</td>
+              <td>${esc(t.text)}</td>
+              <td>${fmtDate(t.createdAt)}</td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${tickets.length === 0 ? '<p class="muted">Обращений пока нет.</p>' : ""}
+  `;
 }
 
 // ---------- Старт ----------

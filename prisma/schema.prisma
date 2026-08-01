@@ -203,3 +203,22 @@ model Transaction {
 
   @@map("transactions")
 }
+
+// Обращение в поддержку из личного кабинета клиента/мастера («Написать в
+// поддержку» — форма, не чат). Записывается в базу и параллельно
+// пересылается администратору в Telegram ботом, см.
+// src/modules/support/service.ts и notifyAdmin в src/bot/bot.ts. Без
+// relation на User/Provider — денормализованные telegramId/name/username,
+// как в Transaction/LeadCharge: это запись обращения, а не бизнес-сущность.
+model SupportTicket {
+  id         Int      @id @default(autoincrement())
+  telegramId String   @map("telegram_id")
+  name       String
+  username   String?
+  role       String // client | provider — из какого кабинета написали
+  subject    String?
+  text       String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("support_tickets")
+}

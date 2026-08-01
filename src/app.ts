@@ -14,6 +14,7 @@ import { authRouter } from "./modules/auth/router";
 import { adminStatsRouter } from "./modules/admin/router";
 import { usersRouter, usersAdminRouter } from "./modules/users/router";
 import { subscriptionsRouter, subscriptionsAdminRouter } from "./modules/subscriptions/router";
+import { supportRouter, supportAdminRouter } from "./modules/support/router";
 
 export function createApp() {
   const app = express();
@@ -32,6 +33,7 @@ export function createApp() {
   app.use("/api/auth", authRouter);
   app.use("/api/users", usersRouter);
   app.use("/api/subscriptions", subscriptionsRouter);
+  app.use("/api/support", supportRouter);
 
   // ---- Админ API — каждый раздел подключается отдельной строкой.  ----
   // ---- Чтобы убрать модуль целиком — достаточно закомментировать одну строку ----
@@ -43,6 +45,7 @@ export function createApp() {
   app.use("/api/admin/client-reviews", clientReviewsAdminRouter);
   app.use("/api/admin/users", usersAdminRouter);
   app.use("/api/admin/subscriptions", subscriptionsAdminRouter);
+  app.use("/api/admin/support", supportAdminRouter);
   app.use("/api/admin", adminStatsRouter);
 
   // ---- Статическая админ-панель (public/admin) ----

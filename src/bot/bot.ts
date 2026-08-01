@@ -6,6 +6,12 @@ import { Telegraf, Markup } from "telegraf";
 // это фоновый процесс поверх Express, а не HTTP-роут.
 
 const MINI_APP_URL = process.env.MINI_APP_URL || "https://goservices.lol";
+const SUPPORT_ADMIN_CHAT_ID = process.env.SUPPORT_ADMIN_CHAT_ID;
+
+// Инстанс бота хранится здесь же, чтобы другие модули (сейчас — support)
+// могли слать через него уведомления админу в личку, не запуская второй
+// бот и не тащя Telegraf-специфику наружу из src/bot.
+let botInstance: ReturnType<typeof createBot> | null = null;
 
 const WELCOME_TEXT =
   "👋 Привет! Это бот Tbilisi Services.\n\n" +
@@ -40,8 +46,25 @@ export function startBot() {
   }
 
   const bot = createBot(token);
+  botInstance = bot;
   bot.launch().catch((e) => console.error("Не удалось запустить Telegram-бота:", e.message));
   process.once("SIGINT", () => bot.stop("SIGINT"));
   process.once("SIGTERM", () => bot.stop("SIGTERM"));
   return bot;
+}
+
+// Уведомление админу в личку — сейчас только новые обращения в поддержку
+// (см. supportService.create). Не бросает исключение наружу: сбой отправки
+// не должен ронять запрос, который создал обращение — оно уже записано в
+// БД независимо от того, дошло ли уведомление.
+export async function notifyAdmin(text: string) {
+  if (!botInstance) {
+    console.warn("Бот не запущен — уведомление админу не отправлено");
+    return;
+  }
+  if (!SUPPORT_ADMIN_CHAT_ID) {
+    console.warn("SUPPORT_ADMIN_CHAT_ID не задан — уведомление админу не отправлено");
+    return;
+  }
+  await botInstance.telegram.sendMessage(SUPPORT_ADMIN_CHAT_ID, text);
 }
