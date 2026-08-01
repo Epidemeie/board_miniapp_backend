@@ -2,8 +2,49 @@ import { Router } from "express";
 import { usersService } from "./service";
 import { adminAuth } from "../../middleware/adminAuth";
 
-// Клиенты видны и управляются только из админки — публичного роутера нет,
-// фронтенд отдельной "учётки клиента" не показывает (см. CLAUDE-frontend.md)
+// Публичный роутер — сохранённые предпочтения входа (язык, роль) по
+// telegramId, экраны language/role должны появляться только один раз.
+// Остальное про клиентов — только из админки, см. usersAdminRouter ниже.
+export const usersRouter = Router();
+
+usersRouter.get("/prefs/:telegramId", async (req, res, next) => {
+  try {
+    res.json(await usersService.getPrefs(req.params.telegramId));
+  } catch (e) {
+    next(e);
+  }
+});
+
+usersRouter.put("/prefs", async (req, res, next) => {
+  try {
+    const { telegramId, name, username, language, entryRole } = req.body;
+    await usersService.setPrefs({ telegramId, name, username, language, entryRole });
+    res.json({ language, entryRole });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Публичный профиль клиента (рейтинг + отзывы от мастеров) — симметрично
+// providersRouter.get("/by-telegram/:telegramId") и providersRouter.get("/:id").
+usersRouter.get("/by-telegram/:telegramId", async (req, res, next) => {
+  try {
+    res.json(await usersService.getPublicByTelegramId(req.params.telegramId));
+  } catch (e) {
+    next(e);
+  }
+});
+
+usersRouter.get("/:id", async (req, res, next) => {
+  try {
+    const user = await usersService.getPublicDetail(Number(req.params.id));
+    if (!user) return res.status(404).json({ error: "Клиент не найден" });
+    res.json(user);
+  } catch (e) {
+    next(e);
+  }
+});
+
 export const usersAdminRouter = Router();
 usersAdminRouter.use(adminAuth);
 

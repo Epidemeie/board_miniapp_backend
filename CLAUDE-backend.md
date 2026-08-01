@@ -38,10 +38,12 @@ Mini App кнопкой (`MINI_APP_URL`). Не HTTP-модуль (нет router.
 ## Модель данных
 
 `prisma/schema.prisma` — источник истины по структуре БД. Ключевые сущности:
-`User` (роль client/provider/admin, привязан к `telegramId`), `Provider`
-(рейтинг, цена, район, услуги — many-to-many через `ProviderService` /
-`ProviderArea`), `Category` → `Service`, `Request` (заявка клиента),
-`Offer` (отклик мастера на заявку), `Review`.
+`User` (роль client/provider/admin, привязан к `telegramId`, свои
+`rating`/`reviewCount`), `Provider` (рейтинг, цена, район, услуги —
+many-to-many через `ProviderService` / `ProviderArea`), `Category` →
+`Service`, `Request` (заявка клиента), `Offer` (отклик мастера на
+заявку), `Review` (отзыв клиента о мастере), `ClientReview` (зеркало
+`Review` в обратную сторону — отзыв мастера о клиенте).
 
 Алгоритм подбора мастеров — `src/modules/requests/matching.ts`, веса:
 услуга 30% / расстояние 20% / цена 15% / рейтинг 15% / отзывы 10% /
@@ -65,11 +67,38 @@ backend даёт для этого отдельные публичные точ�
 ## Удаление мастера/клиента (админка)
 
 `DELETE /api/admin/providers/:id` и `DELETE /api/admin/users/:id` удаляют
-каскадом всё связанное — услуги/районы мастера, его отклики и отзывы; у
-клиента — его заявки и отзывы (`onDelete: Cascade` в `schema.prisma`,
-модели `Provider`, `ProviderService`, `ProviderArea`, `Offer`, `Request`,
-`Review`). Удаление мастера не удаляет его `User` — роль откатывается на
-`client`, чтобы человек мог зарегистрироваться заново.
+каскадом всё связанное — услуги/районы мастера, его отклики и отзывы (в
+обе стороны — `Review` и `ClientReview`); у клиента — его заявки и
+отзывы в обе стороны (`onDelete: Cascade` в `schema.prisma`, модели
+`Provider`, `ProviderService`, `ProviderArea`, `Offer`, `Request`,
+`Review`, `ClientReview`). Удаление мастера не удаляет его `User` —
+роль откатывается на `client`, чтобы человек мог зарегистрироваться
+заново.
+
+## Рейтинг клиента (симметрично рейтингу мастера)
+
+Как и мастер, клиент имеет `rating`/`reviewCount` на `User`, посчитанные
+по отзывам от другой стороны — только в обратную сторону: мастер
+оставляет отзыв о клиенте после завершения заказа. Модуль
+`src/modules/clientReviews` — зеркало `src/modules/reviews`:
+- `POST /api/client-reviews` — мастер оставляет отзыв о клиенте
+  (`providerId`, `requestId`, `userId` клиента, `rating`, `text?`).
+  В отличие от `reviewsService.create` (которому нужен upsert по
+  `telegramId`, т.к. это может быть первый визит клиента), здесь upsert
+  не нужен — и `Provider`, и `User` к этому моменту уже точно
+  существуют. Пересчитывает `User.rating`/`reviewCount` в той же
+  транзакции.
+- `GET /api/users/by-telegram/:telegramId` / `GET /api/users/:id` —
+  публичный профиль клиента (рейтинг + отзывы от мастеров), симметрично
+  `providersRouter`'s `by-telegram`/`:id`. Отдельно от `usersAdminRouter`
+  (закрыт `adminAuth`, для полной карточки клиента в админке).
+- `GET /api/admin/client-reviews`, `DELETE /api/admin/client-reviews/:id`
+  — модерация, зеркало `reviewsAdminRouter`.
+
+Заказ считается завершённым по `Request.status === "completed"` (ставит
+клиент через `POST /api/reviews`, см. `reviewsService.create`) — это
+единственное условие, открывающее мастеру возможность оставить отзыв о
+клиенте; отдельного «мастер подтвердил завершение» шага нет.
 
 ## Известные грабли (уже наступили и исправлены — не повторять)
 

@@ -9,9 +9,10 @@ import { providersRouter, providersAdminRouter } from "./modules/providers/route
 import { requestsRouter, requestsAdminRouter } from "./modules/requests/router";
 import { offersRouter } from "./modules/offers/router";
 import { reviewsRouter, reviewsAdminRouter } from "./modules/reviews/router";
+import { clientReviewsRouter, clientReviewsAdminRouter } from "./modules/clientReviews/router";
 import { authRouter } from "./modules/auth/router";
 import { adminStatsRouter } from "./modules/admin/router";
-import { usersAdminRouter } from "./modules/users/router";
+import { usersRouter, usersAdminRouter } from "./modules/users/router";
 
 export function createApp() {
   const app = express();
@@ -26,7 +27,9 @@ export function createApp() {
   app.use("/api/requests", requestsRouter);
   app.use("/api/offers", offersRouter);
   app.use("/api/reviews", reviewsRouter);
+  app.use("/api/client-reviews", clientReviewsRouter);
   app.use("/api/auth", authRouter);
+  app.use("/api/users", usersRouter);
 
   // ---- Админ API — каждый раздел подключается отдельной строкой.  ----
   // ---- Чтобы убрать модуль целиком — достаточно закомментировать одну строку ----
@@ -35,6 +38,7 @@ export function createApp() {
   app.use("/api/admin/providers", providersAdminRouter);
   app.use("/api/admin/requests", requestsAdminRouter);
   app.use("/api/admin/reviews", reviewsAdminRouter);
+  app.use("/api/admin/client-reviews", clientReviewsAdminRouter);
   app.use("/api/admin/users", usersAdminRouter);
   app.use("/api/admin", adminStatsRouter);
 

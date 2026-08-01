@@ -9,16 +9,21 @@ datasource db {
 }
 
 model User {
-  id         Int      @id @default(autoincrement())
-  telegramId String   @unique @map("telegram_id")
-  name       String
-  username   String?
-  role       String   @default("client") // client | provider | admin
-  createdAt  DateTime @default(now()) @map("created_at")
+  id          Int      @id @default(autoincrement())
+  telegramId  String   @unique @map("telegram_id")
+  name        String
+  username    String?
+  role        String   @default("client") // client | provider | admin
+  language    String   @default("ru") // ru | en — выбор экрана language, привязан к telegramId
+  entryRole   String?  @map("entry_role") // client | provider | null — ещё не выбран; экран role показывать, пока null
+  rating      Float    @default(0) // рейтинг клиента — считается по ClientReview (отзывы от мастеров)
+  reviewCount Int      @default(0) @map("review_count")
+  createdAt   DateTime @default(now()) @map("created_at")
 
-  provider Provider?
-  requests Request[]
-  reviews  Review[]
+  provider      Provider?
+  requests      Request[]
+  reviews       Review[] // отзывы, которые этот клиент оставил мастерам
+  clientReviews ClientReview[] // отзывы, которые мастера оставили об этом клиенте
 
   @@map("users")
 }
@@ -36,10 +41,11 @@ model Provider {
   blocked         Boolean  @default(false)
   createdAt       DateTime @default(now()) @map("created_at")
 
-  services ProviderService[]
-  areas    ProviderArea[]
-  offers   Offer[]
-  reviews  Review[]
+  services      ProviderService[]
+  areas         ProviderArea[]
+  offers        Offer[]
+  reviews       Review[] // отзывы клиентов об этом мастере
+  clientReviews ClientReview[] // отзывы, которые этот мастер оставил клиентам
 
   @@map("providers")
 }
@@ -99,8 +105,9 @@ model Request {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
-  offers  Offer[]
-  reviews Review[]
+  offers        Offer[]
+  reviews       Review[]
+  clientReviews ClientReview[]
 
   @@map("requests")
 }
@@ -133,4 +140,22 @@ model Review {
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("reviews")
+}
+
+// Зеркало Review в обратную сторону: отзыв мастера о клиенте после
+// завершения заказа (Request.status === "completed"), см. reviewsService.
+model ClientReview {
+  id         Int      @id @default(autoincrement())
+  requestId  Int      @map("request_id")
+  request    Request  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  providerId Int      @map("provider_id")
+  provider   Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  userId     Int      @map("user_id") // клиент, которого оценивают
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating     Int
+  tags       String[] @default([])
+  text       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("client_reviews")
 }

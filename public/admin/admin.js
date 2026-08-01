@@ -152,7 +152,7 @@ async function renderStats() {
 
     <div class="section-head"><h2>Клиенты (${clients.length})</h2></div>
     <table>
-      <thead><tr><th>ID</th><th>Имя</th><th>Username</th><th>Заявок</th><th>Отзывов</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Имя</th><th>Username</th><th>Заявок</th><th>Отзывов оставлено</th><th>Рейтинг клиента</th><th></th></tr></thead>
       <tbody>
         ${clients
           .map(
@@ -162,6 +162,7 @@ async function renderStats() {
               <td>${c.username ? "@" + esc(c.username) : "—"}</td>
               <td>${c._count.requests}</td>
               <td>${c._count.reviews}</td>
+              <td>${c._count.clientReviews ? `★ ${c.rating.toFixed(1)} (${c._count.clientReviews})` : "—"}</td>
               <td>
                 <button class="ghost-btn row-action" data-edit-client="${c.id}">Изменить</button>
                 <button class="link-btn row-action" data-del-client="${c.id}">Удалить</button>
@@ -322,6 +323,7 @@ async function renderClientDetail(id) {
     <div class="stat-grid">
       <div class="stat-card"><div class="value">${c.requests.length}</div><div class="label">Заявок</div></div>
       <div class="stat-card"><div class="value">${c.reviews.length}</div><div class="label">Отзывов оставлено</div></div>
+      <div class="stat-card"><div class="value">${c.clientReviews.length ? `★ ${c.rating.toFixed(1)}` : "—"}</div><div class="label">Рейтинг клиента (${c.clientReviews.length})</div></div>
     </div>
 
     <div class="section-head"><h2>Профиль</h2></div>
@@ -369,7 +371,34 @@ async function renderClientDetail(id) {
       </tbody>
     </table>
     ${c.reviews.length === 0 ? '<p class="muted">Отзывов пока нет.</p>' : ""}
+
+    <div class="section-head"><h2>Отзывы о клиенте (от мастеров)</h2></div>
+    <table>
+      <thead><tr><th>Мастер</th><th>Оценка</th><th>Текст</th><th>Дата</th><th></th></tr></thead>
+      <tbody>
+        ${c.clientReviews
+          .map(
+            (r) => `<tr>
+              <td>${esc(r.provider.user.name)}</td>
+              <td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td>
+              <td>${esc(r.text) || "—"}</td>
+              <td>${fmtDate(r.createdAt)}</td>
+              <td><button class="link-btn row-action" data-del-client-review="${r.id}">Удалить</button></td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${c.clientReviews.length === 0 ? '<p class="muted">Отзывов о клиенте пока нет.</p>' : ""}
   `;
+
+  document.querySelectorAll("[data-del-client-review]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Удалить отзыв о клиенте?")) return;
+      await api(`/admin/client-reviews/${btn.dataset.delClientReview}`, { method: "DELETE" });
+      renderClientDetail(id);
+    });
+  });
 
   $("#back-to-stats").addEventListener("click", () => {
     state.adminDetail = null;
@@ -775,9 +804,9 @@ async function renderRequestDetail(id) {
 // ---------- Отзывы ----------
 
 async function renderReviews() {
-  const reviews = await api("/admin/reviews");
+  const [reviews, clientReviews] = await Promise.all([api("/admin/reviews"), api("/admin/client-reviews")]);
   content.innerHTML = `
-    <div class="section-head"><h2>Отзывы</h2></div>
+    <div class="section-head"><h2>Отзывы о мастерах (от клиентов)</h2></div>
     <table>
       <thead><tr><th>ID</th><th>Мастер</th><th>Клиент</th><th>Оценка</th><th>Теги</th><th></th></tr></thead>
       <tbody>
@@ -795,12 +824,40 @@ async function renderReviews() {
           .join("")}
       </tbody>
     </table>
+    ${reviews.length === 0 ? '<p class="muted">Отзывов пока нет.</p>' : ""}
+
+    <div class="section-head"><h2>Отзывы о клиентах (от мастеров)</h2></div>
+    <table>
+      <thead><tr><th>ID</th><th>Клиент</th><th>Мастер</th><th>Оценка</th><th>Теги</th><th></th></tr></thead>
+      <tbody>
+        ${clientReviews
+          .map(
+            (r) => `<tr>
+              <td>${r.id}</td>
+              <td>${r.user.name}</td>
+              <td>${r.provider.user.name}</td>
+              <td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td>
+              <td>${(r.tags || []).join(", ")}</td>
+              <td><button class="link-btn" data-del-client-review="${r.id}">Удалить</button></td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${clientReviews.length === 0 ? '<p class="muted">Отзывов пока нет.</p>' : ""}
   `;
 
   document.querySelectorAll("[data-del-review]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       if (!confirm("Удалить отзыв?")) return;
       await api(`/admin/reviews/${btn.dataset.delReview}`, { method: "DELETE" });
+      renderReviews();
+    });
+  });
+  document.querySelectorAll("[data-del-client-review]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Удалить отзыв?")) return;
+      await api(`/admin/client-reviews/${btn.dataset.delClientReview}`, { method: "DELETE" });
       renderReviews();
     });
   });

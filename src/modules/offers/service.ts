@@ -19,11 +19,12 @@ export const offersService = {
     }),
 
   // Отклики конкретного мастера + заявки, на которые он откликался — экран
-  // «Заявки»/«Заказы» в личном кабинете мастера
+  // «Заявки»/«Заказы» в личном кабинете мастера. clientReviews нужен, чтобы
+  // понять, оставил ли мастер уже отзыв о клиенте по этой заявке.
   listForProvider: (providerId: number) =>
     prisma.offer.findMany({
       where: { providerId },
-      include: { request: { include: { service: true, user: true } } },
+      include: { request: { include: { service: true, user: true, clientReviews: true } } },
       orderBy: { id: "desc" },
     }),
 };
