@@ -16,27 +16,38 @@ export const reviewsService = {
       create: { telegramId: data.telegramId, name: data.name, role: "client" },
     });
 
-    const review = await prisma.review.create({
-      data: {
-        requestId: data.requestId,
-        providerId: data.providerId,
-        userId: user.id,
-        rating: data.rating,
-        tags: data.tags ?? [],
-        text: data.text,
-      },
-    });
+    // Отзыв в этом приложении подаётся только через «Завершить заказ», поэтому
+    // отзыв и перевод заявки в completed — одно действие, атомарно.
+    const review = await prisma.$transaction(async (tx) => {
+      const created = await tx.review.create({
+        data: {
+          requestId: data.requestId,
+          providerId: data.providerId,
+          userId: user.id,
+          rating: data.rating,
+          tags: data.tags ?? [],
+          text: data.text,
+        },
+      });
 
-    // Пересчитываем средний рейтинг и число отзывов мастера
-    const agg = await prisma.review.aggregate({
-      where: { providerId: data.providerId },
-      _avg: { rating: true },
-      _count: { rating: true },
-    });
+      await tx.request.update({
+        where: { id: data.requestId },
+        data: { status: "completed" },
+      });
 
-    await prisma.provider.update({
-      where: { id: data.providerId },
-      data: { rating: agg._avg.rating ?? 0, reviewCount: agg._count.rating },
+      // Пересчитываем средний рейтинг и число отзывов мастера
+      const agg = await tx.review.aggregate({
+        where: { providerId: data.providerId },
+        _avg: { rating: true },
+        _count: { rating: true },
+      });
+
+      await tx.provider.update({
+        where: { id: data.providerId },
+        data: { rating: agg._avg.rating ?? 0, reviewCount: agg._count.rating },
+      });
+
+      return created;
     });
 
     return review;
