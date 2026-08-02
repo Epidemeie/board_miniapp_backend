@@ -8,8 +8,16 @@ export const usersService = {
   // (providersService), а entryRole — это именно предпочтение входа,
   // которое пользователь может поменять в настройках в любой момент.
   getPrefs: async (telegramId: string) => {
-    const user = await prisma.user.findUnique({ where: { telegramId }, select: { language: true, entryRole: true } });
-    return { language: user?.language ?? null, entryRole: user?.entryRole ?? null };
+    const user = await prisma.user.findUnique({
+      where: { telegramId },
+      select: { language: true, entryRole: true, notifyOrders: true, notifyReviews: true },
+    });
+    return {
+      language: user?.language ?? null,
+      entryRole: user?.entryRole ?? null,
+      notifyOrders: user?.notifyOrders ?? true,
+      notifyReviews: user?.notifyReviews ?? true,
+    };
   },
 
   // Выбор роли (entryRole) на экране role или в настройках — это и есть
@@ -18,13 +26,23 @@ export const usersService = {
   // реактивируется (active: true), без отдельной кнопки «восстановить».
   // Для роли provider заодно реактивируем и связанный Provider — иначе
   // мастер выбрал бы «Я мастер», но его карточка так и осталась бы скрыта.
-  setPrefs: async (data: { telegramId: string; name: string; username?: string; language?: string; entryRole?: string }) => {
-    const { telegramId, name, username, language, entryRole } = data;
+  setPrefs: async (data: {
+    telegramId: string;
+    name: string;
+    username?: string;
+    language?: string;
+    entryRole?: string;
+    notifyOrders?: boolean;
+    notifyReviews?: boolean;
+  }) => {
+    const { telegramId, name, username, language, entryRole, notifyOrders, notifyReviews } = data;
     const user = await prisma.user.upsert({
       where: { telegramId },
       update: {
         ...(language !== undefined && { language }),
         ...(entryRole !== undefined && { entryRole, active: true }),
+        ...(notifyOrders !== undefined && { notifyOrders }),
+        ...(notifyReviews !== undefined && { notifyReviews }),
       },
       create: {
         telegramId,
@@ -32,6 +50,8 @@ export const usersService = {
         username,
         ...(language !== undefined && { language }),
         ...(entryRole !== undefined && { entryRole }),
+        ...(notifyOrders !== undefined && { notifyOrders }),
+        ...(notifyReviews !== undefined && { notifyReviews }),
       },
     });
     if (entryRole === "provider") {

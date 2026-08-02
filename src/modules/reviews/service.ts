@@ -1,5 +1,6 @@
 import { prisma } from "../../db/prisma";
 import { recomputeProviderRating } from "../../db/ratings";
+import { notifyUser } from "../../bot/bot";
 
 export const reviewsService = {
   create: async (data: {
@@ -43,15 +44,23 @@ export const reviewsService = {
         _count: { rating: true },
       });
 
-      await tx.provider.update({
+      const provider = await tx.provider.update({
         where: { id: data.providerId },
         data: { rating: agg._avg.rating ?? 0, reviewCount: agg._count.rating },
+        include: { user: true },
       });
 
-      return created;
+      return { created, provider };
     });
 
-    return review;
+    if (review.provider.notifyReviews) {
+      const text = `⭐ Новый отзыв от клиента: ${review.created.rating}/5${review.created.text ? `\n«${review.created.text}»` : ""}`;
+      notifyUser(review.provider.user.telegramId, text).catch((e) =>
+        console.error("Не удалось уведомить мастера о новом отзыве:", e.message)
+      );
+    }
+
+    return review.created;
   },
 
   listForAdmin: () =>

@@ -161,4 +161,26 @@ export const providersService = {
     await prisma.user.update({ where: { id: provider.userId }, data: { entryRole: null } });
     return updated;
   },
+
+  // Настройки уведомлений мастера — сам себе, из личного кабинета (не через
+  // админку). telegramId в теле запроса — та же проверка владения профилем,
+  // что и в deactivate выше.
+  updatePrefs: async (
+    id: number,
+    telegramId: string,
+    data: Partial<{ notifyRequests: boolean; notifyReviews: boolean; notifyOrders: boolean }>
+  ) => {
+    const provider = await prisma.provider.findUnique({ where: { id }, include: { user: true } });
+    if (!provider) {
+      const e: any = new Error("Мастер не найден");
+      e.status = 404;
+      throw e;
+    }
+    if (provider.user.telegramId !== telegramId) {
+      const e: any = new Error("Нет доступа к этому профилю");
+      e.status = 403;
+      throw e;
+    }
+    return prisma.provider.update({ where: { id }, data });
+  },
 };

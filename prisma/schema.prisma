@@ -19,6 +19,8 @@ model User {
   rating      Float    @default(0) // рейтинг клиента — считается по ClientReview (отзывы от мастеров)
   reviewCount Int      @default(0) @map("review_count")
   active      Boolean  @default(true) // «мягкое удаление» аккаунта клиентом — профиль и рейтинг сохраняются, см. usersService.deactivate
+  notifyOrders  Boolean @default(true) @map("notify_orders") // уведомление в Telegram: мастер откликнулся на заявку
+  notifyReviews Boolean @default(true) @map("notify_reviews") // уведомление в Telegram: мастер оставил отзыв о клиенте
   createdAt   DateTime @default(now()) @map("created_at")
 
   provider      Provider?
@@ -44,6 +46,9 @@ model Provider {
   tier            String   @default("free") // free | pro — см. subscriptionsService.getEffectiveTier, тариф напрямую не читать
   tierUntil       DateTime? @map("tier_until") // до какой даты активен pro; null/прошлое — эффективно free
   balance         Int      @default(0) // баланс в целых лари, не может уходить в минус
+  notifyRequests  Boolean  @default(true) @map("notify_requests") // уведомление в Telegram: новая заявка под услуги мастера
+  notifyReviews   Boolean  @default(true) @map("notify_reviews") // уведомление в Telegram: клиент оставил отзыв о мастере
+  notifyOrders    Boolean  @default(true) @map("notify_orders") // уведомление в Telegram: клиент принял отклик мастера
   createdAt       DateTime @default(now()) @map("created_at")
 
   services      ProviderService[]

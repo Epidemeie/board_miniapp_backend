@@ -1,9 +1,9 @@
 import { Telegraf, Markup } from "telegraf";
 
-// Бот — только канал уведомлений (заявки/отклики/заказы), без переписки.
-// Поэтому все ответы короткие и всегда ведут в Mini App, а не пытаются
-// поддержать диалог. Не модуль в общем смысле (router.ts/service.ts) —
-// это фоновый процесс поверх Express, а не HTTP-роут.
+// Бот — только канал уведомлений (заявки/отклики/заказы/отзывы), без
+// переписки. Поэтому все ответы короткие и всегда ведут в Mini App, а не
+// пытаются поддержать диалог. Не модуль в общем смысле (router.ts/service.ts)
+// — это фоновый процесс поверх Express, а не HTTP-роут.
 
 const MINI_APP_URL = process.env.MINI_APP_URL || "https://goservices.lol";
 const SUPPORT_ADMIN_CHAT_ID = process.env.SUPPORT_ADMIN_CHAT_ID;
@@ -67,4 +67,19 @@ export async function notifyAdmin(text: string) {
     return;
   }
   await botInstance.telegram.sendMessage(SUPPORT_ADMIN_CHAT_ID, text);
+}
+
+// Уведомление конкретному пользователю (клиенту или мастеру) в личку —
+// новые заявки/отклики/заказы/отзывы, см. вызовы в requests/offers/reviews/
+// clientReviews service. Как и notifyAdmin, не бросает исключение наружу:
+// сбой доставки (бот не запущен, пользователь ни разу не нажал /start,
+// заблокировал бота) не должен ронять запрос, который уже успешно записал
+// данные в БД — вызывающая сторона сама решает, await'ить или отправить
+// «в фоне» и залогировать ошибку через .catch, см. notifyAdmin выше.
+export async function notifyUser(telegramId: string, text: string) {
+  if (!botInstance) {
+    console.warn("Бот не запущен — уведомление пользователю не отправлено");
+    return;
+  }
+  await botInstance.telegram.sendMessage(telegramId, text, openAppKeyboard());
 }

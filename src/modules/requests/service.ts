@@ -3,6 +3,29 @@ import { scoreProvider } from "./matching";
 import { recomputeProviderRating, recomputeUserRating } from "../../db/ratings";
 import { getEffectiveTier } from "../subscriptions/service";
 import { PRICING } from "../subscriptions/pricing";
+import { notifyUser } from "../../bot/bot";
+
+// Уведомление мастерам, оказывающим услугу заявки — сразу всем подходящим
+// по serviceId, без учёта earlyAccessDelayMin (это ограничение видимости в
+// ленте для Free-тарифа, см. listOpen, а не повод молчать в уведомлениях).
+// Не await — не должно блокировать создание заявки и не должно ронять
+// запрос, если бот недоступен, см. notifyUser в src/bot/bot.ts.
+async function notifyMatchingProviders(request: { id: number; serviceId: number; description: string | null; area: string | null; service: { name: string } }) {
+  const providers = await prisma.provider.findMany({
+    where: { blocked: false, active: true, notifyRequests: true, services: { some: { serviceId: request.serviceId } } },
+    include: { user: true },
+  });
+  const text = [
+    `🆕 Новая заявка: ${request.service.name}`,
+    request.area ? `Район: ${request.area}` : null,
+    request.description ? `Описание: ${request.description}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  await Promise.allSettled(
+    providers.map((p) => notifyUser(p.user.telegramId, text).catch((e) => console.error("Не удалось уведомить мастера о новой заявке:", e.message)))
+  );
+}
 
 export const requestsService = {
   // Клиент создаёт заявку — авторизуется по telegramId (см. модуль auth)
@@ -22,7 +45,7 @@ export const requestsService = {
       create: { telegramId: data.telegramId, name: data.name, username: data.username, role: "client" },
     });
 
-    return prisma.request.create({
+    const request = await prisma.request.create({
       data: {
         userId: user.id,
         serviceId: data.serviceId,
@@ -31,7 +54,12 @@ export const requestsService = {
         urgency: data.urgency,
         area: data.area,
       },
+      include: { service: true },
     });
+
+    notifyMatchingProviders(request).catch((e) => console.error("Не удалось уведомить мастеров о новой заявке:", e.message));
+
+    return request;
   },
 
   // Лента открытых заявок под услуги мастера (мастер может оказывать несколько услуг).

@@ -22,12 +22,36 @@ src/modules/<name>/
 Модули: `categories`, `services`, `providers`, `requests`, `offers`,
 `reviews`, `auth` (Telegram initData), `admin` (аналитика).
 
-Исключение — `src/bot/bot.ts`: Telegram-бот на Telegraf, канал уведомлений
-(заявки/отклики/заказы), без переписки — все ответы короткие и ведут в
-Mini App кнопкой (`MINI_APP_URL`). Не HTTP-модуль (нет router.ts/service.ts,
-не монтируется в `app.ts`), запускается отдельно в `src/index.ts` через
-`startBot()`. Без `TELEGRAM_BOT_TOKEN` просто не стартует (WARN в логах),
-остальной backend продолжает работать.
+Исключение — `src/bot/bot.ts`: Telegram-бот на Telegraf, канал уведомлений,
+без переписки — все ответы короткие и ведут в Mini App кнопкой
+(`MINI_APP_URL`). Не HTTP-модуль (нет router.ts/service.ts, не монтируется
+в `app.ts`), запускается отдельно в `src/index.ts` через `startBot()`. Без
+`TELEGRAM_BOT_TOKEN` просто не стартует (WARN в логах), остальной backend
+продолжает работать.
+
+`notifyUser(telegramId, text)` в `bot.ts` — уведомления клиенту/мастеру
+лично (в отличие от `notifyAdmin`, который всегда шлёт в один и тот же
+`SUPPORT_ADMIN_CHAT_ID`). Вызывается из сервисов, не await'ится (сбой
+доставки не должен ронять запрос, тот же паттерн, что и у `notifyAdmin` в
+разделе «Поддержка» ниже):
+- `requestsService.create` → всем мастерам с подходящей услугой
+  (`Provider.notifyRequests`) — новая заявка.
+- `offersService.create` → клиенту, автору заявки (`User.notifyOrders`) —
+  новый отклик.
+- `offersService.respond` (accepted) → мастеру, чей отклик приняли
+  (`Provider.notifyOrders`) — заказ подтверждён.
+- `reviewsService.create` → мастеру (`Provider.notifyReviews`) — новый
+  отзыв от клиента.
+- `clientReviewsService.create` → клиенту (`User.notifyReviews`) — новый
+  отзыв от мастера.
+
+Все четыре флага (`User.notifyOrders/notifyReviews`,
+`Provider.notifyRequests/notifyReviews/notifyOrders`) по умолчанию `true`,
+меняются самим пользователем: `PUT /api/users/prefs` (клиент) и
+`PUT /api/providers/:id/prefs` (мастер, с проверкой `telegramId` — см.
+`providersService.updatePrefs`, аналогично `deactivate`). Чат
+(`notifyChat` на фронте) — не реализован, эти тумблеры пока чисто
+локальные, чат-фичи в API/схеме нет.
 
 Правило: **новая функциональность = новый модуль** той же структуры.
 Не сваливать логику в `app.ts` — там только подключение роутеров.

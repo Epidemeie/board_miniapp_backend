@@ -1,5 +1,6 @@
 import { prisma } from "../../db/prisma";
 import { recomputeUserRating } from "../../db/ratings";
+import { notifyUser } from "../../bot/bot";
 
 // Зеркало reviewsService в обратную сторону: мастер оценивает клиента после
 // завершения заказа. В отличие от reviewsService.create, здесь не нужен
@@ -33,15 +34,22 @@ export const clientReviewsService = {
         _count: { rating: true },
       });
 
-      await tx.user.update({
+      const user = await tx.user.update({
         where: { id: data.userId },
         data: { rating: agg._avg.rating ?? 0, reviewCount: agg._count.rating },
       });
 
-      return created;
+      return { created, user };
     });
 
-    return review;
+    if (review.user.notifyReviews) {
+      const text = `⭐ Новый отзыв от мастера: ${review.created.rating}/5${review.created.text ? `\n«${review.created.text}»` : ""}`;
+      notifyUser(review.user.telegramId, text).catch((e) =>
+        console.error("Не удалось уведомить клиента о новом отзыве:", e.message)
+      );
+    }
+
+    return review.created;
   },
 
   listForAdmin: () =>
