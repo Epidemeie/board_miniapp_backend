@@ -1,13 +1,18 @@
 import { Provider, ProviderArea, ProviderService } from "@prisma/client";
 
-// Веса ровно как в документе: услуга 30% / расстояние 20% / цена 15% / рейтинг 15% / отзывы 10% / скорость 10%
+// Веса: услуга 30% / расстояние 20% / цена 15% / рейтинг 15% / отзывы 10% / подтверждён профиль 10%.
+// Было «скорость ответа» (responseTimeMin) — убрали: это было статическое
+// поле по умолчанию 30 мин у всех мастеров, никогда не пересчитывалось по
+// реальному поведению, то есть по факту не измеряло вообще ничего. Ручное
+// подтверждение профиля админом (Provider.verified) — понятный и честный
+// сигнал доверия, пока не появится реальная метрика отзывчивости.
 export const MATCH_WEIGHTS = {
   service: 30,
   distance: 20,
   price: 15,
   rating: 15,
   reviews: 10,
-  speed: 10,
+  verified: 10,
 };
 
 type ProviderWithRelations = Provider & { areas: ProviderArea[]; services: ProviderService[] };
@@ -31,7 +36,7 @@ export function scoreProvider(
 
   const ratingScore = Math.round((provider.rating / 5) * 100);
   const reviewsScore = Math.min(100, provider.reviewCount * 4);
-  const speedScore = Math.max(10, Math.round(100 - provider.responseTimeMin * 2));
+  const verifiedScore = provider.verified ? 100 : 20;
 
   const breakdown = {
     service: serviceScore,
@@ -39,7 +44,7 @@ export function scoreProvider(
     price: priceScore,
     rating: ratingScore,
     reviews: reviewsScore,
-    speed: speedScore,
+    verified: verifiedScore,
   };
 
   const overall = Math.round(
@@ -48,7 +53,7 @@ export function scoreProvider(
       priceScore * MATCH_WEIGHTS.price +
       ratingScore * MATCH_WEIGHTS.rating +
       reviewsScore * MATCH_WEIGHTS.reviews +
-      speedScore * MATCH_WEIGHTS.speed) /
+      verifiedScore * MATCH_WEIGHTS.verified) /
       100
   );
 
