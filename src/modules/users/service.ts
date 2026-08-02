@@ -10,13 +10,14 @@ export const usersService = {
   getPrefs: async (telegramId: string) => {
     const user = await prisma.user.findUnique({
       where: { telegramId },
-      select: { language: true, entryRole: true, notifyOrders: true, notifyReviews: true },
+      select: { language: true, entryRole: true, notifyOrders: true, notifyReviews: true, notifyChat: true },
     });
     return {
       language: user?.language ?? null,
       entryRole: user?.entryRole ?? null,
       notifyOrders: user?.notifyOrders ?? true,
       notifyReviews: user?.notifyReviews ?? true,
+      notifyChat: user?.notifyChat ?? true,
     };
   },
 
@@ -34,8 +35,9 @@ export const usersService = {
     entryRole?: string;
     notifyOrders?: boolean;
     notifyReviews?: boolean;
+    notifyChat?: boolean;
   }) => {
-    const { telegramId, name, username, language, entryRole, notifyOrders, notifyReviews } = data;
+    const { telegramId, name, username, language, entryRole, notifyOrders, notifyReviews, notifyChat } = data;
     const user = await prisma.user.upsert({
       where: { telegramId },
       update: {
@@ -43,6 +45,7 @@ export const usersService = {
         ...(entryRole !== undefined && { entryRole, active: true }),
         ...(notifyOrders !== undefined && { notifyOrders }),
         ...(notifyReviews !== undefined && { notifyReviews }),
+        ...(notifyChat !== undefined && { notifyChat }),
       },
       create: {
         telegramId,
@@ -52,6 +55,7 @@ export const usersService = {
         ...(entryRole !== undefined && { entryRole }),
         ...(notifyOrders !== undefined && { notifyOrders }),
         ...(notifyReviews !== undefined && { notifyReviews }),
+        ...(notifyChat !== undefined && { notifyChat }),
       },
     });
     if (entryRole === "provider") {

@@ -52,8 +52,8 @@ providersRouter.put("/:id/deactivate", async (req, res, next) => {
 // Мастер сам меняет настройки уведомлений из личного кабинета
 providersRouter.put("/:id/prefs", async (req, res, next) => {
   try {
-    const { telegramId, notifyRequests, notifyReviews, notifyOrders } = req.body;
-    res.json(await providersService.updatePrefs(Number(req.params.id), telegramId, { notifyRequests, notifyReviews, notifyOrders }));
+    const { telegramId, notifyRequests, notifyReviews, notifyOrders, notifyChat } = req.body;
+    res.json(await providersService.updatePrefs(Number(req.params.id), telegramId, { notifyRequests, notifyReviews, notifyOrders, notifyChat }));
   } catch (e) {
     next(e);
   }

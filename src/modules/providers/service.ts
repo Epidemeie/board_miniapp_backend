@@ -168,7 +168,7 @@ export const providersService = {
   updatePrefs: async (
     id: number,
     telegramId: string,
-    data: Partial<{ notifyRequests: boolean; notifyReviews: boolean; notifyOrders: boolean }>
+    data: Partial<{ notifyRequests: boolean; notifyReviews: boolean; notifyOrders: boolean; notifyChat: boolean }>
   ) => {
     const provider = await prisma.provider.findUnique({ where: { id }, include: { user: true } });
     if (!provider) {

@@ -65,6 +65,9 @@ npm run dev                  # http://localhost:3000
 | PUT | `/api/offers/:id/respond` | принять/отклонить отклик |
 | POST | `/api/reviews` | оставить отзыв |
 | POST | `/api/auth/telegram` | проверить initData Telegram |
+| GET | `/api/messages/thread/:requestId?telegramId=` | сообщения чата по заказу (доступен после подтверждения), помечает чужие непрочитанные прочитанными |
+| POST | `/api/messages/thread/:requestId` | отправить сообщение в чат заказа |
+| GET | `/api/messages/unread-count?telegramId=&role=` | бейдж непрочитанных сообщений |
 
 ## Админ-эндпоинты (Basic Auth)
 

@@ -17,9 +17,9 @@ usersRouter.get("/prefs/:telegramId", async (req, res, next) => {
 
 usersRouter.put("/prefs", async (req, res, next) => {
   try {
-    const { telegramId, name, username, language, entryRole, notifyOrders, notifyReviews } = req.body;
-    await usersService.setPrefs({ telegramId, name, username, language, entryRole, notifyOrders, notifyReviews });
-    res.json({ language, entryRole, notifyOrders, notifyReviews });
+    const { telegramId, name, username, language, entryRole, notifyOrders, notifyReviews, notifyChat } = req.body;
+    await usersService.setPrefs({ telegramId, name, username, language, entryRole, notifyOrders, notifyReviews, notifyChat });
+    res.json({ language, entryRole, notifyOrders, notifyReviews, notifyChat });
   } catch (e) {
     next(e);
   }

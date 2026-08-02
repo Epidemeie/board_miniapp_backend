@@ -15,6 +15,7 @@ import { adminStatsRouter } from "./modules/admin/router";
 import { usersRouter, usersAdminRouter } from "./modules/users/router";
 import { subscriptionsRouter, subscriptionsAdminRouter } from "./modules/subscriptions/router";
 import { supportRouter, supportAdminRouter } from "./modules/support/router";
+import { messagesRouter } from "./modules/messages/router";
 
 export function createApp() {
   const app = express();
@@ -34,6 +35,7 @@ export function createApp() {
   app.use("/api/users", usersRouter);
   app.use("/api/subscriptions", subscriptionsRouter);
   app.use("/api/support", supportRouter);
+  app.use("/api/messages", messagesRouter);
 
   // ---- Админ API — каждый раздел подключается отдельной строкой.  ----
   // ---- Чтобы убрать модуль целиком — достаточно закомментировать одну строку ----

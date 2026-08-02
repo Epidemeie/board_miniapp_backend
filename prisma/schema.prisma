@@ -21,6 +21,7 @@ model User {
   active      Boolean  @default(true) // «мягкое удаление» аккаунта клиентом — профиль и рейтинг сохраняются, см. usersService.deactivate
   notifyOrders  Boolean @default(true) @map("notify_orders") // уведомление в Telegram: мастер откликнулся на заявку
   notifyReviews Boolean @default(true) @map("notify_reviews") // уведомление в Telegram: мастер оставил отзыв о клиенте
+  notifyChat    Boolean @default(true) @map("notify_chat") // уведомление в Telegram: новое сообщение в чате заказа
   createdAt   DateTime @default(now()) @map("created_at")
 
   provider      Provider?
@@ -49,6 +50,7 @@ model Provider {
   notifyRequests  Boolean  @default(true) @map("notify_requests") // уведомление в Telegram: новая заявка под услуги мастера
   notifyReviews   Boolean  @default(true) @map("notify_reviews") // уведомление в Telegram: клиент оставил отзыв о мастере
   notifyOrders    Boolean  @default(true) @map("notify_orders") // уведомление в Telegram: клиент принял отклик мастера
+  notifyChat      Boolean  @default(true) @map("notify_chat") // уведомление в Telegram: новое сообщение в чате заказа
   createdAt       DateTime @default(now()) @map("created_at")
 
   services      ProviderService[]
@@ -121,6 +123,7 @@ model Request {
   reviews       Review[]
   clientReviews ClientReview[]
   charges       LeadCharge[]
+  messages      Message[]
 
   @@map("requests")
 }
@@ -137,6 +140,23 @@ model Offer {
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("offers")
+}
+
+// Чат по заказу — доступен только после того, как клиент принял отклик
+// (см. Offer.status == "accepted"); участник со стороны мастера
+// определяется через этот принятый отклик, а не хранится тут отдельно —
+// см. messagesService.getThreadContext. senderRole вместо userId/providerId,
+// т.к. это просто «кто из двух сторон», а не ссылка на отдельную сущность.
+model Message {
+  id         Int       @id @default(autoincrement())
+  requestId  Int       @map("request_id")
+  request    Request   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  senderRole String    @map("sender_role") // client | provider
+  text       String
+  readAt     DateTime? @map("read_at") // прочитано получателем (не отправителем) — источник счётчика непрочитанных
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@map("messages")
 }
 
 model Review {
