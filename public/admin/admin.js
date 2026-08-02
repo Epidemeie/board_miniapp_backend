@@ -1,4 +1,14 @@
-const state = { auth: null, categories: [], services: [], tab: "stats", adminDetail: null, requestsSubTab: "active", requestDetailId: null };
+const state = {
+  auth: null,
+  categories: [],
+  services: [],
+  tab: "stats",
+  userDetailId: null,
+  userDetailTab: "client",
+  userFilters: { search: "", service: "", area: "", minRating: "", status: "" },
+  requestsSubTab: "active",
+  requestDetailId: null,
+};
 
 const $ = (sel) => document.querySelector(sel);
 const content = $("#content");
@@ -73,7 +83,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("is-active"));
     btn.classList.add("is-active");
-    state.adminDetail = null;
+    state.userDetailId = null;
     state.requestDetailId = null;
     renderTab(btn.dataset.tab);
   });
@@ -84,9 +94,9 @@ async function renderTab(tab) {
   content.innerHTML = '<p class="muted">Загрузка…</p>';
   try {
     if (tab === "stats") return await renderStats();
+    if (tab === "users") return await renderUsers();
     if (tab === "categories") return await renderCategories();
     if (tab === "services") return await renderServices();
-    if (tab === "providers") return await renderProviders();
     if (tab === "requests") return await renderRequests();
     if (tab === "reviews") return await renderReviews();
     if (tab === "monetization") return await renderMonetization();
@@ -96,7 +106,7 @@ async function renderTab(tab) {
   }
 }
 
-// ---------- Аналитика ----------
+// ---------- Общие хелперы ----------
 
 function esc(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -116,6 +126,14 @@ function providerStatusLabel(p) {
   return p.verified ? "подтверждён" : "новый";
 }
 
+// Симметрично providerStatusLabel — blocked теперь и у User (см. схему), не
+// путать с active === false (клиент сам нажал «Удалить аккаунт»).
+function clientStatusLabel(u) {
+  if (u.blocked) return "заблокирован";
+  if (u.active === false) return "деактивирован (удалил себя)";
+  return "активен";
+}
+
 // Тариф — считаем на лету так же, как getEffectiveTier на бэкенде: pro
 // только если явно выставлен И срок ещё не истёк, иначе показываем Free.
 function isEffectivelyPro(p) {
@@ -125,14 +143,10 @@ function tierLabel(p) {
   return isEffectivelyPro(p) ? `Pro до ${fmtDate(p.tierUntil)}` : "Free";
 }
 
-async function renderStats() {
-  if (state.adminDetail) {
-    return state.adminDetail.type === "provider"
-      ? renderProviderDetail(state.adminDetail.id)
-      : renderClientDetail(state.adminDetail.id);
-  }
+// ---------- Аналитика ----------
 
-  const [s, providers, clients] = await Promise.all([api("/admin/stats"), api("/admin/providers"), api("/admin/users")]);
+async function renderStats() {
+  const s = await api("/admin/stats");
 
   content.innerHTML = `
     <div class="stat-grid">
@@ -145,112 +159,366 @@ async function renderStats() {
       <div class="stat-card"><div class="value">${s.conversion.requestToOrder}%</div><div class="label">Заявка → заказ</div></div>
     </div>
 
-    <div class="section-head"><h2>Мастера (${providers.length})</h2></div>
+    <div class="section-head"><h2>Динамика</h2></div>
     <table>
-      <thead><tr><th>ID</th><th>Имя</th><th>Услуги</th><th>Районы</th><th>Рейтинг</th><th>Статус</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Новых клиентов</th><th>Новых мастеров</th><th>Новых заявок</th></tr></thead>
       <tbody>
-        ${providers
-          .map(
-            (p) => `<tr class="row-clickable" data-view-provider="${p.id}">
-              <td>${p.id}</td>
-              <td>${esc(p.user.name)}</td>
-              <td>${p.services.map((s) => esc(s.service.name)).join(", ") || "—"}</td>
-              <td>${p.areas.map((a) => esc(a.area)).join(", ") || "—"}</td>
-              <td>${p.rating.toFixed(1)} (${p.reviewCount})</td>
-              <td>${statusBadge(providerStatusLabel(p))}</td>
-              <td>
-                <button class="ghost-btn row-action" data-edit-provider="${p.id}">Изменить</button>
-                <button class="link-btn row-action" data-del-provider="${p.id}">Удалить</button>
-              </td>
-            </tr>`
-          )
-          .join("")}
+        <tr><td>За 7 дней</td><td>+${s.growth.last7.users}</td><td>+${s.growth.last7.providers}</td><td>+${s.growth.last7.requests}</td></tr>
+        <tr><td>За 30 дней</td><td>+${s.growth.last30.users}</td><td>+${s.growth.last30.providers}</td><td>+${s.growth.last30.requests}</td></tr>
       </tbody>
     </table>
-    ${providers.length === 0 ? '<p class="muted">Мастеров пока нет.</p>' : ""}
 
-    <div class="section-head"><h2>Клиенты (${clients.length})</h2></div>
+    <div class="section-head"><h2>Незакрытый спрос</h2></div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="value">${s.unmetDemand.openNoOffers}</div><div class="label">Открытых заявок без откликов</div></div>
+      <div class="stat-card"><div class="value">${s.unmetDemand.avgAcceptHours ?? "—"}${s.unmetDemand.avgAcceptHours !== null ? " ч" : ""}</div><div class="label">Среднее время до принятия отклика</div></div>
+      <div class="stat-card"><div class="value">${s.repeatClients}</div><div class="label">Клиентов с повторными заявками</div></div>
+    </div>
+
+    <div class="section-head"><h2>Заявки по статусам</h2></div>
     <table>
-      <thead><tr><th>ID</th><th>Имя</th><th>Username</th><th>Заявок</th><th>Отзывов оставлено</th><th>Рейтинг клиента</th><th>Статус</th><th></th></tr></thead>
+      <thead><tr><th>Статус</th><th>Количество</th></tr></thead>
       <tbody>
-        ${clients
-          .map(
-            (c) => `<tr class="row-clickable" data-view-client="${c.id}">
-              <td>${c.id}</td>
-              <td>${esc(c.name)}</td>
-              <td>${c.username ? "@" + esc(c.username) : "—"}</td>
-              <td>${c._count.requests}</td>
-              <td>${c._count.reviews}</td>
-              <td>${c._count.clientReviews ? `★ ${c.rating.toFixed(1)} (${c._count.clientReviews})` : "—"}</td>
-              <td>${statusBadge(c.active === false ? "деактивирован (удалил себя)" : "активен")}</td>
-              <td>
-                <button class="ghost-btn row-action" data-edit-client="${c.id}">Изменить</button>
-                <button class="link-btn row-action" data-del-client="${c.id}">Удалить</button>
-              </td>
-            </tr>`
-          )
+        ${["open", "matched", "completed", "cancelled"]
+          .map((st) => `<tr><td>${statusBadge(st)}</td><td>${s.requestsByStatus[st] || 0}</td></tr>`)
           .join("")}
       </tbody>
     </table>
-    ${clients.length === 0 ? '<p class="muted">Клиентов пока нет.</p>' : ""}
+
+    <div class="section-head"><h2>Топ услуг по спросу</h2></div>
+    <table>
+      <thead><tr><th>Услуга</th><th>Заявок</th></tr></thead>
+      <tbody>${s.demand.topServices.map((t) => `<tr><td>${esc(t.name)}</td><td>${t.count}</td></tr>`).join("")}</tbody>
+    </table>
+    ${s.demand.topServices.length === 0 ? '<p class="muted">Данных пока нет.</p>' : ""}
+
+    <div class="section-head"><h2>Топ районов по спросу</h2></div>
+    <table>
+      <thead><tr><th>Район</th><th>Заявок</th></tr></thead>
+      <tbody>${s.demand.topAreas.map((t) => `<tr><td>${esc(t.area)}</td><td>${t.count}</td></tr>`).join("")}</tbody>
+    </table>
+    ${s.demand.topAreas.length === 0 ? '<p class="muted">Данных пока нет.</p>' : ""}
   `;
+}
 
-  document.querySelectorAll("[data-view-provider]").forEach((row) => {
-    row.addEventListener("click", () => {
-      state.adminDetail = { type: "provider", id: Number(row.dataset.viewProvider) };
-      renderTab("stats");
-    });
-  });
-  document.querySelectorAll("[data-edit-provider]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openProviderEdit(Number(btn.dataset.editProvider));
-    });
-  });
-  document.querySelectorAll("[data-del-provider]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (!confirm("Удалить мастера? Также удалятся его услуги, районы, отклики и отзывы.")) return;
-      await api(`/admin/providers/${btn.dataset.delProvider}`, { method: "DELETE" });
-      renderTab("stats");
-    });
-  });
-  document.querySelectorAll("[data-view-client]").forEach((row) => {
-    row.addEventListener("click", () => {
-      state.adminDetail = { type: "client", id: Number(row.dataset.viewClient) };
-      renderTab("stats");
-    });
-  });
-  document.querySelectorAll("[data-edit-client]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openClientEdit(Number(btn.dataset.editClient));
-    });
-  });
-  document.querySelectorAll("[data-del-client]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (!confirm("Удалить клиента? Также удалятся его заявки и отзывы.")) return;
-      await api(`/admin/users/${btn.dataset.delClient}`, { method: "DELETE" });
-      renderTab("stats");
-    });
+// ---------- Пользователи (клиенты + мастера в одном списке) ----------
+
+// Один и тот же человек (telegramId) может быть и клиентом, и мастером —
+// это один User, Provider у него просто дополнительная связанная запись
+// (или её нет). Поэтому список строится по User, а не по двум разным
+// таблицам, как было раньше (стата отдельно «Мастера», отдельно «Клиенты»).
+function userRoleBadges(u) {
+  const isClient = u.entryRole === "client" || u._count.requests > 0 || u._count.reviews > 0;
+  const isMaster = !!u.provider;
+  const badges = [];
+  if (isClient) badges.push('<span class="badge">клиент</span>');
+  if (isMaster) badges.push('<span class="badge badge-master">мастер</span>');
+  if (!badges.length) badges.push('<span class="badge">—</span>');
+  return badges.join(" ");
+}
+
+function userOverallStatusBadges(u) {
+  const parts = [];
+  if (u.blocked) parts.push(statusBadge("клиент: заблокирован"));
+  else if (u.active === false) parts.push(statusBadge("клиент: деактивирован"));
+  if (u.provider) {
+    if (u.provider.blocked) parts.push(statusBadge("мастер: заблокирован"));
+    else if (u.provider.active === false) parts.push(statusBadge("мастер: деактивирован"));
+    else parts.push(statusBadge(u.provider.verified ? "мастер: подтверждён" : "мастер: новый"));
+  }
+  if (!parts.length) parts.push(statusBadge("активен"));
+  return parts.join(" ");
+}
+
+function applyUserFilters(users) {
+  const f = state.userFilters;
+  return users.filter((u) => {
+    if (f.search) {
+      const q = f.search.toLowerCase();
+      const hay = `${u.name} ${u.username || ""} ${u.telegramId}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (f.service && (!u.provider || !u.provider.services.some((s) => s.serviceId === Number(f.service)))) return false;
+    if (f.area && (!u.provider || !u.provider.areas.some((a) => a.area === f.area))) return false;
+    if (f.minRating) {
+      const min = Number(f.minRating);
+      const masterOk = u.provider && u.provider.rating >= min;
+      const clientOk = u.rating >= min;
+      if (!masterOk && !clientOk) return false;
+    }
+    if (f.status === "blocked" && !u.blocked && !u.provider?.blocked) return false;
+    if (f.status === "deactivated" && u.active !== false && u.provider?.active !== false) return false;
+    if (f.status === "active") {
+      const clientActive = !u.blocked && u.active !== false;
+      const masterActive = u.provider ? !u.provider.blocked && u.provider.active !== false : false;
+      if (!clientActive && !masterActive) return false;
+    }
+    return true;
   });
 }
 
-// ---------- Детальная карточка мастера ----------
+function usersTableHtml(filtered, total) {
+  return `
+    <div class="section-head"><h2>Пользователи (${filtered.length} из ${total})</h2></div>
+    <table>
+      <thead><tr><th>ID</th><th>Имя</th><th>Роли</th><th>Услуги</th><th>Районы</th><th>Рейтинг</th><th>Статус</th></tr></thead>
+      <tbody>
+        ${filtered
+          .map(
+            (u) => `<tr class="row-clickable" data-view-user="${u.id}">
+              <td>${u.id}</td>
+              <td>${esc(u.name)}${u.username ? ` · @${esc(u.username)}` : ""}</td>
+              <td>${userRoleBadges(u)}</td>
+              <td>${u.provider ? u.provider.services.map((s) => esc(s.service.name)).join(", ") || "—" : "—"}</td>
+              <td>${u.provider ? u.provider.areas.map((a) => esc(a.area)).join(", ") || "—" : "—"}</td>
+              <td>${u.provider ? `★${u.provider.rating.toFixed(1)}` : u.clientReviews?.length || u._count.clientReviews ? `★${u.rating.toFixed(1)}` : "—"}</td>
+              <td>${userOverallStatusBadges(u)}</td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${filtered.length === 0 ? '<p class="muted">Никого не найдено.</p>' : ""}
+  `;
+}
 
-async function renderProviderDetail(id) {
-  const p = await api(`/admin/providers/${id}`);
+async function renderUsers() {
+  if (state.userDetailId) return renderUserDetail(state.userDetailId);
+
+  const [users, services] = await Promise.all([api("/admin/users"), api("/services")]);
+
+  const areasSet = new Set();
+  users.forEach((u) => u.provider?.areas.forEach((a) => areasSet.add(a.area)));
+  const areas = Array.from(areasSet).sort();
+  const f = state.userFilters;
+
+  content.innerHTML = `
+    <div class="section-head"><h2>Добавить мастера</h2></div>
+    <div class="form-grid">
+      <input id="um-name" placeholder="Имя мастера" />
+      <input id="um-telegram" placeholder="Telegram ID (число)" />
+      <input id="um-username" placeholder="Username (необязательно)" />
+      <input id="um-price" placeholder="Цена от (₾)" type="number" />
+      <select id="um-service">
+        ${services.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}
+      </select>
+      <input id="um-areas" placeholder="Районы через запятую: Ваке, Сабуртало" />
+      <textarea id="um-desc" class="full" placeholder="Короткое описание"></textarea>
+      <button class="primary-btn full" id="um-add">Добавить мастера</button>
+    </div>
+
+    <div class="filter-bar">
+      <input id="uf-search" placeholder="Поиск: имя, username, telegram id" value="${esc(f.search)}" />
+      <select id="uf-service">
+        <option value="">Все услуги</option>
+        ${services.map((s) => `<option value="${s.id}" ${String(f.service) === String(s.id) ? "selected" : ""}>${esc(s.name)}</option>`).join("")}
+      </select>
+      <select id="uf-area">
+        <option value="">Все районы</option>
+        ${areas.map((a) => `<option value="${esc(a)}" ${f.area === a ? "selected" : ""}>${esc(a)}</option>`).join("")}
+      </select>
+      <input id="uf-rating" type="number" min="0" max="5" step="0.5" placeholder="Рейтинг от" value="${esc(f.minRating)}" />
+      <select id="uf-status">
+        <option value="">Любой статус</option>
+        <option value="active" ${f.status === "active" ? "selected" : ""}>Активен</option>
+        <option value="blocked" ${f.status === "blocked" ? "selected" : ""}>Заблокирован</option>
+        <option value="deactivated" ${f.status === "deactivated" ? "selected" : ""}>Деактивирован</option>
+      </select>
+      <button class="ghost-btn" id="uf-reset">Сбросить</button>
+    </div>
+
+    <div id="users-table-area"></div>
+  `;
+
+  function refresh() {
+    const filtered = applyUserFilters(users);
+    $("#users-table-area").innerHTML = usersTableHtml(filtered, users.length);
+    document.querySelectorAll("[data-view-user]").forEach((row) => {
+      row.addEventListener("click", () => {
+        state.userDetailId = Number(row.dataset.viewUser);
+        state.userDetailTab = "client";
+        renderTab("users");
+      });
+    });
+  }
+  refresh();
+
+  $("#uf-search").addEventListener("input", () => {
+    state.userFilters.search = $("#uf-search").value;
+    refresh();
+  });
+  $("#uf-service").addEventListener("change", () => {
+    state.userFilters.service = $("#uf-service").value;
+    refresh();
+  });
+  $("#uf-area").addEventListener("change", () => {
+    state.userFilters.area = $("#uf-area").value;
+    refresh();
+  });
+  $("#uf-rating").addEventListener("input", () => {
+    state.userFilters.minRating = $("#uf-rating").value;
+    refresh();
+  });
+  $("#uf-status").addEventListener("change", () => {
+    state.userFilters.status = $("#uf-status").value;
+    refresh();
+  });
+  $("#uf-reset").addEventListener("click", () => {
+    state.userFilters = { search: "", service: "", area: "", minRating: "", status: "" };
+    renderTab("users");
+  });
+
+  $("#um-add").addEventListener("click", async () => {
+    const name = $("#um-name").value.trim();
+    const telegramId = $("#um-telegram").value.trim();
+    if (!name || !telegramId) return alert("Имя и Telegram ID обязательны");
+    const payload = {
+      name,
+      telegramId,
+      username: $("#um-username").value.trim() || undefined,
+      priceFrom: $("#um-price").value ? Number($("#um-price").value) : undefined,
+      description: $("#um-desc").value.trim() || undefined,
+      serviceIds: [Number($("#um-service").value)],
+      areas: $("#um-areas").value.split(",").map((a) => a.trim()).filter(Boolean),
+    };
+    try {
+      await api("/admin/providers", { method: "POST", body: JSON.stringify(payload) });
+      renderTab("users");
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+}
+
+// ---------- Детальная карточка пользователя: вкладки «Клиент»/«Мастер» ----------
+
+async function renderUserDetail(id) {
+  const u = await api(`/admin/users/${id}`);
+  const tab = state.userDetailTab || "client";
+
+  content.innerHTML = `
+    <button class="link-btn" id="back-to-users">← Ко всем пользователям</button>
+    <div class="section-head"><h2>${esc(u.name)}</h2></div>
+    <div class="tabs" style="padding: 0; margin-bottom: 14px; border-bottom: none;">
+      <button class="tab-btn ${tab === "client" ? "is-active" : ""}" data-user-sub="client">Клиент</button>
+      <button class="tab-btn ${tab === "master" ? "is-active" : ""}" data-user-sub="master">Мастер${u.provider ? "" : " (нет профиля)"}</button>
+    </div>
+    <div id="user-detail-body">${tab === "client" ? renderUserClientTabHtml(u) : renderUserMasterTabHtml(u)}</div>
+  `;
+
+  $("#back-to-users").addEventListener("click", () => {
+    state.userDetailId = null;
+    renderTab("users");
+  });
+  document.querySelectorAll("[data-user-sub]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.userDetailTab = btn.dataset.userSub;
+      renderUserDetail(id);
+    });
+  });
+
+  wireUserDetailActions(u, tab);
+}
+
+function renderUserClientTabHtml(u) {
+  return `
+    <div class="section-head">
+      <h2 style="font-size:14px;color:var(--muted);">Профиль клиента</h2>
+      <div>
+        <button class="ghost-btn row-action" id="client-edit">Изменить</button>
+        <button class="ghost-btn row-action" id="client-toggle-block">${u.blocked ? "Разблокировать" : "Заблокировать"}</button>
+        <button class="link-btn" id="client-delete">Удалить</button>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="value">${u.requests.length}</div><div class="label">Заявок</div></div>
+      <div class="stat-card"><div class="value">${u.reviews.length}</div><div class="label">Отзывов оставлено</div></div>
+      <div class="stat-card"><div class="value">${u.clientReviews.length ? `★ ${u.rating.toFixed(1)}` : "—"}</div><div class="label">Рейтинг клиента (${u.clientReviews.length})</div></div>
+    </div>
+
+    <div class="section-head"><h2>Профиль</h2></div>
+    <table>
+      <tbody>
+        <tr><td>Telegram ID</td><td>${esc(u.telegramId)}</td></tr>
+        <tr><td>Username</td><td>${u.username ? "@" + esc(u.username) : "—"}</td></tr>
+        <tr><td>Статус</td><td>${statusBadge(clientStatusLabel(u))}</td></tr>
+        <tr><td>Регистрация</td><td>${fmtDate(u.createdAt)}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="section-head"><h2>История заявок</h2></div>
+    <table>
+      <thead><tr><th>Услуга</th><th>Район</th><th>Статус</th><th>Откликов</th><th>Дата</th></tr></thead>
+      <tbody>
+        ${u.requests
+          .map(
+            (r) => `<tr>
+              <td>${esc(r.service.name)}</td>
+              <td>${esc(r.area) || "—"}</td>
+              <td>${statusBadge(r.status)}</td>
+              <td>${r.offers.length}</td>
+              <td>${fmtDate(r.createdAt)}</td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${u.requests.length === 0 ? '<p class="muted">Заявок пока нет.</p>' : ""}
+
+    <div class="section-head"><h2>Отзывы клиента (мастерам)</h2></div>
+    <table>
+      <thead><tr><th>Мастер</th><th>Оценка</th><th>Текст</th><th>Дата</th></tr></thead>
+      <tbody>
+        ${u.reviews
+          .map(
+            (r) => `<tr>
+              <td>${esc(r.provider.user.name)}</td>
+              <td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td>
+              <td>${esc(r.text) || "—"}</td>
+              <td>${fmtDate(r.createdAt)}</td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${u.reviews.length === 0 ? '<p class="muted">Отзывов пока нет.</p>' : ""}
+
+    <div class="section-head"><h2>Отзывы о клиенте (от мастеров)</h2></div>
+    <table>
+      <thead><tr><th>Мастер</th><th>Оценка</th><th>Текст</th><th>Дата</th><th></th></tr></thead>
+      <tbody>
+        ${u.clientReviews
+          .map(
+            (r) => `<tr>
+              <td>${esc(r.provider.user.name)}</td>
+              <td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td>
+              <td>${esc(r.text) || "—"}</td>
+              <td>${fmtDate(r.createdAt)}</td>
+              <td><button class="link-btn row-action" data-del-client-review="${r.id}">Удалить</button></td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${u.clientReviews.length === 0 ? '<p class="muted">Отзывов о клиенте пока нет.</p>' : ""}
+  `;
+}
+
+function renderUserMasterTabHtml(u) {
+  const p = u.provider;
+  if (!p) return '<p class="muted">Этот пользователь не зарегистрирован как мастер.</p>';
+
   const accepted = p.offers.filter((o) => o.status === "accepted").length;
   const declined = p.offers.filter((o) => o.status === "declined").length;
   const pending = p.offers.filter((o) => o.status === "pending").length;
 
-  content.innerHTML = `
-    <button class="link-btn" id="back-to-stats">← Ко всем мастерам и клиентам</button>
-    <div class="section-head"><h2>${esc(p.user.name)}</h2>
+  return `
+    <div class="section-head">
+      <h2 style="font-size:14px;color:var(--muted);">Профиль мастера</h2>
       <div>
-        <button class="ghost-btn" id="detail-edit">Изменить</button>
-        <button class="link-btn" id="detail-delete">Удалить</button>
+        <button class="ghost-btn row-action" id="master-edit">Изменить</button>
+        <button class="ghost-btn row-action" id="master-toggle-block">${p.blocked ? "Разблокировать" : "Заблокировать"}</button>
+        <button class="link-btn" id="master-delete">Удалить профиль</button>
       </div>
     </div>
     <div class="stat-grid">
@@ -265,8 +533,6 @@ async function renderProviderDetail(id) {
     <div class="section-head"><h2>Профиль</h2></div>
     <table>
       <tbody>
-        <tr><td>Telegram ID</td><td>${esc(p.user.telegramId)}</td></tr>
-        <tr><td>Username</td><td>${p.user.username ? "@" + esc(p.user.username) : "—"}</td></tr>
         <tr><td>Услуги</td><td>${p.services.map((s) => esc(s.service.name)).join(", ") || "—"}</td></tr>
         <tr><td>Районы</td><td>${p.areas.map((a) => esc(a.area)).join(", ") || "—"}</td></tr>
         <tr><td>Цена от</td><td>${p.priceFrom ? p.priceFrom + " ₾" : "—"}</td></tr>
@@ -313,125 +579,42 @@ async function renderProviderDetail(id) {
     </table>
     ${p.reviews.length === 0 ? '<p class="muted">Отзывов пока нет.</p>' : ""}
   `;
-
-  $("#back-to-stats").addEventListener("click", () => {
-    state.adminDetail = null;
-    renderTab("stats");
-  });
-  $("#detail-edit").addEventListener("click", () => openProviderEdit(id));
-  $("#detail-delete").addEventListener("click", async () => {
-    if (!confirm("Удалить мастера? Также удалятся его услуги, районы, отклики и отзывы.")) return;
-    await api(`/admin/providers/${id}`, { method: "DELETE" });
-    state.adminDetail = null;
-    renderTab("stats");
-  });
 }
 
-// ---------- Детальная карточка клиента ----------
-
-async function renderClientDetail(id) {
-  const c = await api(`/admin/users/${id}`);
-
-  content.innerHTML = `
-    <button class="link-btn" id="back-to-stats">← Ко всем мастерам и клиентам</button>
-    <div class="section-head"><h2>${esc(c.name)}</h2>
-      <div>
-        <button class="ghost-btn" id="detail-edit">Изменить</button>
-        <button class="link-btn" id="detail-delete">Удалить</button>
-      </div>
-    </div>
-    <div class="stat-grid">
-      <div class="stat-card"><div class="value">${c.requests.length}</div><div class="label">Заявок</div></div>
-      <div class="stat-card"><div class="value">${c.reviews.length}</div><div class="label">Отзывов оставлено</div></div>
-      <div class="stat-card"><div class="value">${c.clientReviews.length ? `★ ${c.rating.toFixed(1)}` : "—"}</div><div class="label">Рейтинг клиента (${c.clientReviews.length})</div></div>
-    </div>
-
-    <div class="section-head"><h2>Профиль</h2></div>
-    <table>
-      <tbody>
-        <tr><td>Telegram ID</td><td>${esc(c.telegramId)}</td></tr>
-        <tr><td>Username</td><td>${c.username ? "@" + esc(c.username) : "—"}</td></tr>
-        <tr><td>Статус</td><td>${statusBadge(c.active === false ? "деактивирован (удалил себя)" : "активен")}</td></tr>
-        <tr><td>Регистрация</td><td>${fmtDate(c.createdAt)}</td></tr>
-      </tbody>
-    </table>
-
-    <div class="section-head"><h2>История заявок</h2></div>
-    <table>
-      <thead><tr><th>Услуга</th><th>Район</th><th>Статус</th><th>Откликов</th><th>Дата</th></tr></thead>
-      <tbody>
-        ${c.requests
-          .map(
-            (r) => `<tr>
-              <td>${esc(r.service.name)}</td>
-              <td>${esc(r.area) || "—"}</td>
-              <td>${statusBadge(r.status)}</td>
-              <td>${r.offers.length}</td>
-              <td>${fmtDate(r.createdAt)}</td>
-            </tr>`
-          )
-          .join("")}
-      </tbody>
-    </table>
-    ${c.requests.length === 0 ? '<p class="muted">Заявок пока нет.</p>' : ""}
-
-    <div class="section-head"><h2>Отзывы клиента</h2></div>
-    <table>
-      <thead><tr><th>Мастер</th><th>Оценка</th><th>Текст</th><th>Дата</th></tr></thead>
-      <tbody>
-        ${c.reviews
-          .map(
-            (r) => `<tr>
-              <td>${esc(r.provider.user.name)}</td>
-              <td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td>
-              <td>${esc(r.text) || "—"}</td>
-              <td>${fmtDate(r.createdAt)}</td>
-            </tr>`
-          )
-          .join("")}
-      </tbody>
-    </table>
-    ${c.reviews.length === 0 ? '<p class="muted">Отзывов пока нет.</p>' : ""}
-
-    <div class="section-head"><h2>Отзывы о клиенте (от мастеров)</h2></div>
-    <table>
-      <thead><tr><th>Мастер</th><th>Оценка</th><th>Текст</th><th>Дата</th><th></th></tr></thead>
-      <tbody>
-        ${c.clientReviews
-          .map(
-            (r) => `<tr>
-              <td>${esc(r.provider.user.name)}</td>
-              <td>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</td>
-              <td>${esc(r.text) || "—"}</td>
-              <td>${fmtDate(r.createdAt)}</td>
-              <td><button class="link-btn row-action" data-del-client-review="${r.id}">Удалить</button></td>
-            </tr>`
-          )
-          .join("")}
-      </tbody>
-    </table>
-    ${c.clientReviews.length === 0 ? '<p class="muted">Отзывов о клиенте пока нет.</p>' : ""}
-  `;
-
+function wireUserDetailActions(u, tab) {
   document.querySelectorAll("[data-del-client-review]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       if (!confirm("Удалить отзыв о клиенте?")) return;
       await api(`/admin/client-reviews/${btn.dataset.delClientReview}`, { method: "DELETE" });
-      renderClientDetail(id);
+      renderUserDetail(u.id);
     });
   });
 
-  $("#back-to-stats").addEventListener("click", () => {
-    state.adminDetail = null;
-    renderTab("stats");
-  });
-  $("#detail-edit").addEventListener("click", () => openClientEdit(id));
-  $("#detail-delete").addEventListener("click", async () => {
-    if (!confirm("Удалить клиента? Также удалятся его заявки и отзывы.")) return;
-    await api(`/admin/users/${id}`, { method: "DELETE" });
-    state.adminDetail = null;
-    renderTab("stats");
-  });
+  if (tab === "client") {
+    $("#client-edit").addEventListener("click", () => openClientEdit(u.id));
+    $("#client-toggle-block").addEventListener("click", async () => {
+      await api(`/admin/users/${u.id}`, { method: "PUT", body: JSON.stringify({ blocked: !u.blocked }) });
+      renderUserDetail(u.id);
+    });
+    $("#client-delete").addEventListener("click", async () => {
+      if (!confirm("Удалить клиента? Также удалятся его заявки и отзывы.")) return;
+      await api(`/admin/users/${u.id}`, { method: "DELETE" });
+      state.userDetailId = null;
+      renderTab("users");
+    });
+  } else if (u.provider) {
+    $("#master-edit").addEventListener("click", () => openProviderEdit(u.provider.id));
+    $("#master-toggle-block").addEventListener("click", async () => {
+      await api(`/admin/providers/${u.provider.id}`, { method: "PUT", body: JSON.stringify({ blocked: !u.provider.blocked }) });
+      renderUserDetail(u.id);
+    });
+    $("#master-delete").addEventListener("click", async () => {
+      if (!confirm("Удалить профиль мастера? Также удалятся его услуги, районы, отклики и отзывы. Клиентский профиль останется.")) return;
+      await api(`/admin/providers/${u.provider.id}`, { method: "DELETE" });
+      state.userDetailTab = "client";
+      renderUserDetail(u.id);
+    });
+  }
 }
 
 // ---------- Модалка редактирования ----------
@@ -503,7 +686,7 @@ async function openProviderEdit(id) {
       }),
     });
     closeModal();
-    renderTab("stats");
+    renderTab("users");
   });
 }
 
@@ -529,7 +712,7 @@ async function openClientEdit(id) {
       }),
     });
     closeModal();
-    renderTab("stats");
+    renderTab("users");
   });
 }
 
@@ -619,83 +802,6 @@ async function renderServices() {
       if (!confirm("Удалить услугу?")) return;
       await api(`/admin/services/${btn.dataset.delSvc}`, { method: "DELETE" });
       renderServices();
-    });
-  });
-}
-
-// ---------- Мастера ----------
-
-async function renderProviders() {
-  const [providers, services] = await Promise.all([api("/admin/providers"), api("/services")]);
-  content.innerHTML = `
-    <div class="section-head"><h2>Мастера</h2></div>
-    <div class="form-grid">
-      <input id="pr-name" placeholder="Имя мастера" />
-      <input id="pr-telegram" placeholder="Telegram ID (число)" />
-      <input id="pr-username" placeholder="Username (необязательно)" />
-      <input id="pr-price" placeholder="Цена от (₾)" type="number" />
-      <select id="pr-service">
-        ${services.map((s) => `<option value="${s.id}">${s.name}</option>`).join("")}
-      </select>
-      <input id="pr-areas" placeholder="Районы через запятую: Ваке, Сабуртало" />
-      <textarea id="pr-desc" class="full" placeholder="Короткое описание"></textarea>
-      <button class="primary-btn full" id="pr-add">Добавить мастера</button>
-    </div>
-    <table>
-      <thead><tr><th>ID</th><th>Имя</th><th>Услуги</th><th>Районы</th><th>Рейтинг</th><th>Статус</th><th></th></tr></thead>
-      <tbody>
-        ${providers
-          .map(
-            (p) => `<tr>
-              <td>${p.id}</td>
-              <td>${p.user.name}</td>
-              <td>${p.services.map((s) => s.service.name).join(", ")}</td>
-              <td>${p.areas.map((a) => a.area).join(", ")}</td>
-              <td>${p.rating.toFixed(1)} (${p.reviewCount})</td>
-              <td>
-                <span class="badge">${providerStatusLabel(p)}</span>
-              </td>
-              <td>
-                ${
-                  p.blocked
-                    ? `<button class="link-btn" data-unblock="${p.id}">Разблокировать</button>`
-                    : `<button class="link-btn" data-block="${p.id}">Заблокировать</button>`
-                }
-              </td>
-            </tr>`
-          )
-          .join("")}
-      </tbody>
-    </table>
-  `;
-
-  $("#pr-add").addEventListener("click", async () => {
-    const name = $("#pr-name").value.trim();
-    const telegramId = $("#pr-telegram").value.trim();
-    if (!name || !telegramId) return alert("Имя и Telegram ID обязательны");
-    const payload = {
-      name,
-      telegramId,
-      username: $("#pr-username").value.trim() || undefined,
-      priceFrom: $("#pr-price").value ? Number($("#pr-price").value) : undefined,
-      description: $("#pr-desc").value.trim() || undefined,
-      serviceIds: [Number($("#pr-service").value)],
-      areas: $("#pr-areas").value.split(",").map((a) => a.trim()).filter(Boolean),
-    };
-    await api("/admin/providers", { method: "POST", body: JSON.stringify(payload) });
-    renderProviders();
-  });
-
-  document.querySelectorAll("[data-block]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await api(`/admin/providers/${btn.dataset.block}`, { method: "PUT", body: JSON.stringify({ blocked: true }) });
-      renderProviders();
-    });
-  });
-  document.querySelectorAll("[data-unblock]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await api(`/admin/providers/${btn.dataset.unblock}`, { method: "PUT", body: JSON.stringify({ blocked: false }) });
-      renderProviders();
     });
   });
 }

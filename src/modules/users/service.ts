@@ -96,17 +96,28 @@ export const usersService = {
       },
     }),
 
-  // Клиенты для админки — с количеством заявок/отзывов для превью в списке
+  // Все пользователи для админки (вкладка «Пользователи») — не только role:
+  // "client", а вообще все User, т.к. один и тот же человек может быть и
+  // клиентом, и мастером (Provider — отдельная связанная запись). provider
+  // тут нужен и для бейджа «Мастер» в списке, и для фильтров по
+  // услугам/районам мастера, поэтому включаем сразу его services/areas —
+  // без этого пришлось бы делать отдельный запрос на каждую строку.
   list: async () => {
     const users = await prisma.user.findMany({
-      where: { role: "client" },
       orderBy: { id: "desc" },
-      include: { _count: { select: { requests: true, reviews: true, clientReviews: true } } },
+      include: {
+        _count: { select: { requests: true, reviews: true, clientReviews: true } },
+        provider: { include: { services: { include: { service: true } }, areas: true } },
+      },
     });
     return users;
   },
 
-  // Детальная карточка клиента: вся история заявок, отзывов от клиента и о клиенте
+  // Детальная карточка пользователя — объединённая: клиентская история
+  // (заявки, отзывы) + карточка мастера целиком (услуги/районы/отклики/
+  // отзывы о нём), если у этого User есть связанный Provider. Одним
+  // запросом, чтобы фронту не нужно было отдельно дёргать /admin/providers/:id
+  // для той же самой карточки в другой вкладке.
   getDetail: (id: number) =>
     prisma.user.findUnique({
       where: { id },
@@ -126,10 +137,21 @@ export const usersService = {
           include: { provider: { include: { user: true } } },
           orderBy: { id: "desc" },
         },
+        provider: {
+          include: {
+            services: { include: { service: { include: { category: true } } } },
+            areas: true,
+            offers: {
+              include: { request: { include: { service: true, user: true } } },
+              orderBy: { id: "desc" },
+            },
+            reviews: { include: { user: true }, orderBy: { id: "desc" } },
+          },
+        },
       },
     }),
 
-  update: (id: number, data: { name?: string; username?: string }) =>
+  update: (id: number, data: { name?: string; username?: string; blocked?: boolean }) =>
     prisma.user.update({ where: { id }, data }),
 
   remove: (id: number) => prisma.user.delete({ where: { id } }),

@@ -44,6 +44,11 @@ export const requestsService = {
       update: { name: data.name, username: data.username },
       create: { telegramId: data.telegramId, name: data.name, username: data.username, role: "client" },
     });
+    if (user.blocked) {
+      const e: any = new Error("Ваш аккаунт заблокирован администратором");
+      e.status = 403;
+      throw e;
+    }
 
     const request = await prisma.request.create({
       data: {

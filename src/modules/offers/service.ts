@@ -7,6 +7,13 @@ export const offersService = {
   // упало (нехватка средств) или отклик не создался — откатывается всё,
   // не бывает ситуации «деньги списали, отклик не появился».
   create: async (data: { requestId: number; providerId: number; price: number; comment?: string }) => {
+    const provider = await prisma.provider.findUniqueOrThrow({ where: { id: data.providerId }, include: { user: true } });
+    if (provider.blocked || provider.user.blocked) {
+      const e: any = new Error("Доступ заблокирован администратором");
+      e.status = 403;
+      throw e;
+    }
+
     const offer = await prisma.$transaction(async (tx) => {
       await subscriptionsService.chargeLead(data.providerId, data.requestId, tx);
       return tx.offer.create({ data });

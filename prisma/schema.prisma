@@ -19,6 +19,7 @@ model User {
   rating      Float    @default(0) // рейтинг клиента — считается по ClientReview (отзывы от мастеров)
   reviewCount Int      @default(0) @map("review_count")
   active      Boolean  @default(true) // «мягкое удаление» аккаунта клиентом — профиль и рейтинг сохраняются, см. usersService.deactivate
+  blocked     Boolean  @default(false) // блокировка админом за нарушения — не путать с active (самоудаление); блокирует только НОВЫЕ действия (заявки), история остаётся видна
   notifyOrders  Boolean @default(true) @map("notify_orders") // уведомление в Telegram: мастер откликнулся на заявку
   notifyReviews Boolean @default(true) @map("notify_reviews") // уведомление в Telegram: мастер оставил отзыв о клиенте
   notifyChat    Boolean @default(true) @map("notify_chat") // уведомление в Telegram: новое сообщение в чате заказа

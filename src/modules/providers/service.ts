@@ -1,5 +1,19 @@
 import { prisma } from "../../db/prisma";
 
+// Проверка перед самостоятельной регистрацией (POST /providers/register) —
+// заблокированный клиент не должен обходить блокировку, просто заведя
+// профиль мастера. Ручное добавление мастера из админки (POST /admin/providers,
+// тот же providersService.create) эту проверку сознательно не проходит —
+// админ добавляет мастера сам, ему видно, кого он добавляет.
+export async function assertNotBlocked(telegramId: string) {
+  const user = await prisma.user.findUnique({ where: { telegramId } });
+  if (user?.blocked) {
+    const e: any = new Error("Ваш аккаунт заблокирован администратором");
+    e.status = 403;
+    throw e;
+  }
+}
+
 export const providersService = {
   // Публичный список — только не заблокированные и не деактивированные
   // самим мастером, для отображения в Mini App

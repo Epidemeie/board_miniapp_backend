@@ -99,3 +99,14 @@ tr.row-clickable:hover td { background: var(--paper); }
 .checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .checkbox-row input { width: auto; }
 .tms-label-inline { font-size: 11.5px; color: var(--muted); margin: 4px 0 -2px; }
+
+.filter-bar {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px; margin-bottom: 16px;
+}
+.filter-bar input, .filter-bar select {
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 12.5px; font-family: inherit;
+}
+.filter-bar input[placeholder^="Поиск"] { flex: 1 1 200px; min-width: 160px; }
+.badge-master { border-color: var(--accent); color: var(--accent); }

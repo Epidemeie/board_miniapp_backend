@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { providersService } from "./service";
+import { providersService, assertNotBlocked } from "./service";
 import { adminAuth } from "../../middleware/adminAuth";
 
 export const providersRouter = Router();
@@ -24,6 +24,7 @@ providersRouter.get("/by-telegram/:telegramId", async (req, res, next) => {
 // Самостоятельная регистрация мастера из Mini App (без админки), verified: false по умолчанию
 providersRouter.post("/register", async (req, res, next) => {
   try {
+    await assertNotBlocked(req.body.telegramId);
     res.json(await providersService.create(req.body));
   } catch (e) {
     next(e);
