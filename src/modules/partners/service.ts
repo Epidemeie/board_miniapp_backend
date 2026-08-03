@@ -29,4 +29,10 @@ export const partnersService = {
   update: (id: number, data: PartnerInput) => prisma.partner.update({ where: { id }, data }),
 
   remove: (id: number) => prisma.partner.delete({ where: { id } }),
+
+  incrementImpressions: (ids: number[]) =>
+    prisma.partner.updateMany({ where: { id: { in: ids } }, data: { impressionCount: { increment: 1 } } }),
+
+  incrementClick: (id: number) =>
+    prisma.partner.update({ where: { id }, data: { clickCount: { increment: 1 } } }),
 };

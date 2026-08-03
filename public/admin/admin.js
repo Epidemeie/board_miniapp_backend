@@ -775,7 +775,7 @@ async function renderPartners() {
       <button class="primary-btn full" id="pt-add">Добавить партнёра</button>
     </div>
     <table>
-      <thead><tr><th>ID</th><th>Лого</th><th>Название</th><th>Категория</th><th>Порядок</th><th>Статус</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Лого</th><th>Название</th><th>Категория</th><th>Порядок</th><th>Статус</th><th>Показы</th><th>Клики</th><th>CTR</th><th></th></tr></thead>
       <tbody>
         ${partners
           .map(
@@ -786,6 +786,9 @@ async function renderPartners() {
               <td>${esc(p.tag || "")}</td>
               <td>${p.sortOrder}</td>
               <td>${p.active ? '<span class="badge">активен</span>' : '<span class="badge">скрыт</span>'}</td>
+              <td>${p.impressionCount}</td>
+              <td>${p.clickCount}</td>
+              <td>${p.impressionCount > 0 ? Math.round((p.clickCount / p.impressionCount) * 1000) / 10 + "%" : "—"}</td>
               <td>
                 <button class="link-btn" data-edit-pt="${p.id}">Изменить</button>
                 <button class="link-btn" data-toggle-pt="${p.id}" data-active="${p.active}">${p.active ? "Скрыть" : "Показать"}</button>

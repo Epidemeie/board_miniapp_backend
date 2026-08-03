@@ -249,6 +249,13 @@ model Partner {
   area        String?
   active      Boolean  @default(true) // видимость клиентам; управляется вручную из админки
   sortOrder   Int      @default(0) @map("sort_order")
+  // Показ баннера клиенту (главная лента/страница списка) — считается на
+  // фронтенде через POST /partners/impressions. Клик — открытие карточки
+  // партнёра («Узнать больше»), через POST /partners/:id/click. Переход по
+  // внешней ссылке (сайт/telegram) намеренно не считаем — для этого партнёру
+  // выдаётся ссылка с UTM-меткой, сравнение делается на его стороне.
+  impressionCount Int @default(0) @map("impression_count")
+  clickCount      Int @default(0) @map("click_count")
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("partners")

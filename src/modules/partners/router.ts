@@ -23,6 +23,28 @@ partnersRouter.get("/:id", async (req, res, next) => {
   }
 });
 
+// Показ баннера (лента на главной или страница списка) — фронтенд шлёт все
+// id, которые реально отрисовались за один раз.
+partnersRouter.post("/impressions", async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.map(Number).filter((n: number) => Number.isInteger(n)) : [];
+    if (ids.length > 0) await partnersService.incrementImpressions(ids);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Клик «Узнать больше» — открытие карточки конкретного партнёра.
+partnersRouter.post("/:id/click", async (req, res, next) => {
+  try {
+    await partnersService.incrementClick(Number(req.params.id));
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // Логотип хранится как data: URI прямо в базе (см. модель Partner) — без
 // отдельного файлового хранилища/volume, проще для MVP на одном VPS.
 // Ограничение размера — на самой строке, т.к. express.json() уже пропустил
