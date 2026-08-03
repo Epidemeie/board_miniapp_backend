@@ -248,7 +248,8 @@ model Partner {
   websiteLabel String?  @map("website_label") // что видит клиент вместо самой ссылки; если пусто — показываем website как есть
   telegram    String?
   area        String?
-  active      Boolean  @default(true) // видимость клиентам; управляется вручную из админки
+  active        Boolean @default(true) // видимость клиентам («Показывать клиентам» в админке)
+  showProviders Boolean @default(false) @map("show_providers") // видимость мастерам («Показывать мастерам» в админке) — независимо от active
   sortOrder   Int      @default(0) @map("sort_order")
   // Показ баннера клиенту (главная лента/страница списка) — считается на
   // фронтенде через POST /partners/impressions. Клик — открытие карточки

@@ -7,7 +7,8 @@ export const partnersRouter = Router();
 
 partnersRouter.get("/", async (req, res, next) => {
   try {
-    res.json(await partnersService.listActive());
+    const audience = req.query.audience === "provider" ? "provider" : "client";
+    res.json(await partnersService.listForAudience(audience));
   } catch (e) {
     next(e);
   }
@@ -15,7 +16,7 @@ partnersRouter.get("/", async (req, res, next) => {
 
 partnersRouter.get("/:id", async (req, res, next) => {
   try {
-    const partner = await partnersService.getActiveById(Number(req.params.id));
+    const partner = await partnersService.getVisibleById(Number(req.params.id));
     if (!partner) return res.status(404).json({ error: "Партнёр не найден" });
     res.json(partner);
   } catch (e) {

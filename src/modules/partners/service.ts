@@ -12,15 +12,23 @@ type PartnerInput = {
   telegram?: string | null;
   area?: string | null;
   active?: boolean;
+  showProviders?: boolean;
   sortOrder?: number;
 };
 
-export const partnersService = {
-  // Публичный список — только активные, в порядке sortOrder/id
-  listActive: () =>
-    prisma.partner.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }),
+export type PartnerAudience = "client" | "provider";
 
-  getActiveById: (id: number) => prisma.partner.findFirst({ where: { id, active: true } }),
+export const partnersService = {
+  // Публичный список для конкретной аудитории — клиенты видят active,
+  // мастера видят showProviders; это независимые переключатели в админке.
+  listForAudience: (audience: PartnerAudience) =>
+    prisma.partner.findMany({
+      where: audience === "provider" ? { showProviders: true } : { active: true },
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+    }),
+
+  getVisibleById: (id: number) =>
+    prisma.partner.findFirst({ where: { id, OR: [{ active: true }, { showProviders: true }] } }),
 
   // Админский список — все, включая скрытые
   listAll: () => prisma.partner.findMany({ orderBy: [{ sortOrder: "asc" }, { id: "asc" }] }),

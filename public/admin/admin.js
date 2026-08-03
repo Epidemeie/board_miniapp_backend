@@ -5,7 +5,7 @@ const state = {
   tab: "stats",
   userDetailId: null,
   userDetailTab: "client",
-  userFilters: { search: "", service: "", area: "", minRating: "", status: "" },
+  userFilters: { search: "", role: "", service: "", area: "", minRating: "", status: "" },
   requestsSubTab: "active",
   requestDetailId: null,
 };
@@ -239,6 +239,11 @@ function applyUserFilters(users) {
       const hay = `${u.name} ${u.username || ""} ${u.telegramId}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
+    if (f.role === "client") {
+      const isClient = u.entryRole === "client" || u._count.requests > 0 || u._count.reviews > 0;
+      if (!isClient) return false;
+    }
+    if (f.role === "provider" && !u.provider) return false;
     if (f.service && (!u.provider || !u.provider.services.some((s) => s.serviceId === Number(f.service)))) return false;
     if (f.area && (!u.provider || !u.provider.areas.some((a) => a.area === f.area))) return false;
     if (f.minRating) {
@@ -310,6 +315,11 @@ async function renderUsers() {
 
     <div class="filter-bar">
       <input id="uf-search" placeholder="Поиск: имя, username, telegram id" value="${esc(f.search)}" />
+      <select id="uf-role">
+        <option value="">Клиент/мастер</option>
+        <option value="client" ${f.role === "client" ? "selected" : ""}>Клиент</option>
+        <option value="provider" ${f.role === "provider" ? "selected" : ""}>Мастер</option>
+      </select>
       <select id="uf-service">
         <option value="">Все услуги</option>
         ${services.map((s) => `<option value="${s.id}" ${String(f.service) === String(s.id) ? "selected" : ""}>${esc(s.name)}</option>`).join("")}
@@ -348,6 +358,10 @@ async function renderUsers() {
     state.userFilters.search = $("#uf-search").value;
     refresh();
   });
+  $("#uf-role").addEventListener("change", () => {
+    state.userFilters.role = $("#uf-role").value;
+    refresh();
+  });
   $("#uf-service").addEventListener("change", () => {
     state.userFilters.service = $("#uf-service").value;
     refresh();
@@ -365,7 +379,7 @@ async function renderUsers() {
     refresh();
   });
   $("#uf-reset").addEventListener("click", () => {
-    state.userFilters = { search: "", service: "", area: "", minRating: "", status: "" };
+    state.userFilters = { search: "", role: "", service: "", area: "", minRating: "", status: "" };
     renderTab("users");
   });
 
@@ -773,10 +787,12 @@ async function renderPartners() {
       <input id="pt-area" placeholder="Район (необязательно)" />
       <textarea id="pt-desc" class="full" placeholder="Описание для страницы партнёра"></textarea>
       <input id="pt-offer" class="full" placeholder="Акция/промокод (напр. Скидка 15% по промокоду TMS15)" />
+      <label class="checkbox-row"><input type="checkbox" id="pt-show-clients" checked /> Показывать клиентам</label>
+      <label class="checkbox-row"><input type="checkbox" id="pt-show-providers" /> Показывать мастерам</label>
       <button class="primary-btn full" id="pt-add">Добавить партнёра</button>
     </div>
     <table>
-      <thead><tr><th>ID</th><th>Лого</th><th>Название</th><th>Категория</th><th>Порядок</th><th>Статус</th><th>Показы</th><th>Клики</th><th>CTR</th><th></th></tr></thead>
+      <thead><tr><th>ID</th><th>Лого</th><th>Название</th><th>Категория</th><th>Порядок</th><th>Клиентам</th><th>Мастерам</th><th>Показы</th><th>Клики</th><th>CTR</th><th></th></tr></thead>
       <tbody>
         ${partners
           .map(
@@ -786,13 +802,15 @@ async function renderPartners() {
               <td>${esc(p.name)}</td>
               <td>${esc(p.tag || "")}</td>
               <td>${p.sortOrder}</td>
-              <td>${p.active ? '<span class="badge">активен</span>' : '<span class="badge">скрыт</span>'}</td>
+              <td>${p.active ? '<span class="badge">да</span>' : '<span class="badge">нет</span>'}</td>
+              <td>${p.showProviders ? '<span class="badge">да</span>' : '<span class="badge">нет</span>'}</td>
               <td>${p.impressionCount}</td>
               <td>${p.clickCount}</td>
               <td>${p.impressionCount > 0 ? Math.round((p.clickCount / p.impressionCount) * 1000) / 10 + "%" : "—"}</td>
               <td>
                 <button class="link-btn" data-edit-pt="${p.id}">Изменить</button>
-                <button class="link-btn" data-toggle-pt="${p.id}" data-active="${p.active}">${p.active ? "Скрыть" : "Показать"}</button>
+                <button class="link-btn" data-toggle-pt="${p.id}" data-active="${p.active}">${p.active ? "Скрыть от клиентов" : "Показать клиентам"}</button>
+                <button class="link-btn" data-toggle-pt-providers="${p.id}" data-active="${p.showProviders}">${p.showProviders ? "Скрыть от мастеров" : "Показать мастерам"}</button>
                 <button class="link-btn" data-del-pt="${p.id}">Удалить</button>
               </td>
             </tr>`
@@ -833,6 +851,8 @@ async function renderPartners() {
         area: $("#pt-area").value.trim() || undefined,
         description: $("#pt-desc").value.trim() || undefined,
         offerText: $("#pt-offer").value.trim() || undefined,
+        active: $("#pt-show-clients").checked,
+        showProviders: $("#pt-show-providers").checked,
       }),
     });
     renderPartners();
@@ -845,6 +865,13 @@ async function renderPartners() {
     btn.addEventListener("click", async () => {
       const active = btn.dataset.active === "true";
       await api(`/admin/partners/${btn.dataset.togglePt}`, { method: "PUT", body: JSON.stringify({ active: !active }) });
+      renderPartners();
+    });
+  });
+  document.querySelectorAll("[data-toggle-pt-providers]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const active = btn.dataset.active === "true";
+      await api(`/admin/partners/${btn.dataset.togglePtProviders}`, { method: "PUT", body: JSON.stringify({ showProviders: !active }) });
       renderPartners();
     });
   });
@@ -875,7 +902,8 @@ function openPartnerEdit(id, partners) {
       <input id="edit-pt-telegram" placeholder="Telegram" value="${esc(p.telegram || "")}" />
       <input id="edit-pt-area" placeholder="Район" value="${esc(p.area || "")}" />
       <input id="edit-pt-sort" type="number" placeholder="Порядок показа (меньше — выше)" value="${p.sortOrder}" />
-      <label class="checkbox-row full"><input type="checkbox" id="edit-pt-active" ${p.active ? "checked" : ""} /> Показывать клиентам</label>
+      <label class="checkbox-row"><input type="checkbox" id="edit-pt-active" ${p.active ? "checked" : ""} /> Показывать клиентам</label>
+      <label class="checkbox-row"><input type="checkbox" id="edit-pt-show-providers" ${p.showProviders ? "checked" : ""} /> Показывать мастерам</label>
       <textarea id="edit-pt-desc" class="full" placeholder="Описание">${esc(p.description || "")}</textarea>
       <input id="edit-pt-offer" class="full" placeholder="Акция/промокод" value="${esc(p.offerText || "")}" />
       <button class="ghost-btn" id="edit-pt-cancel">Отмена</button>
@@ -914,6 +942,7 @@ function openPartnerEdit(id, partners) {
         area: $("#edit-pt-area").value.trim(),
         sortOrder: Number($("#edit-pt-sort").value) || 0,
         active: $("#edit-pt-active").checked,
+        showProviders: $("#edit-pt-show-providers").checked,
         description: $("#edit-pt-desc").value.trim(),
         offerText: $("#edit-pt-offer").value.trim(),
       }),
