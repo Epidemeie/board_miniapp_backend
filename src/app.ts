@@ -16,12 +16,16 @@ import { usersRouter, usersAdminRouter } from "./modules/users/router";
 import { subscriptionsRouter, subscriptionsAdminRouter } from "./modules/subscriptions/router";
 import { supportRouter, supportAdminRouter } from "./modules/support/router";
 import { messagesRouter } from "./modules/messages/router";
+import { partnersRouter, partnersAdminRouter } from "./modules/partners/router";
 
 export function createApp() {
   const app = express();
 
   app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") ?? "*" }));
-  app.use(express.json());
+  // Лимит поднят с дефолтных 100kb — логотип партнёра хранится как base64
+  // прямо в теле запроса (см. modules/partners), полноценный размерный
+  // контроль всё равно делает partnersAdminRouter.
+  app.use(express.json({ limit: "2mb" }));
 
   // ---- Публичное API — им пользуется Mini App (фронтенд) ----
   app.use("/api/categories", categoriesRouter);
@@ -36,6 +40,7 @@ export function createApp() {
   app.use("/api/subscriptions", subscriptionsRouter);
   app.use("/api/support", supportRouter);
   app.use("/api/messages", messagesRouter);
+  app.use("/api/partners", partnersRouter);
 
   // ---- Админ API — каждый раздел подключается отдельной строкой.  ----
   // ---- Чтобы убрать модуль целиком — достаточно закомментировать одну строку ----
@@ -48,6 +53,7 @@ export function createApp() {
   app.use("/api/admin/users", usersAdminRouter);
   app.use("/api/admin/subscriptions", subscriptionsAdminRouter);
   app.use("/api/admin/support", supportAdminRouter);
+  app.use("/api/admin/partners", partnersAdminRouter);
   app.use("/api/admin", adminStatsRouter);
 
   // ---- Статическая админ-панель (public/admin) ----

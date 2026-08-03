@@ -236,6 +236,24 @@ model Transaction {
 // src/modules/support/service.ts и notifyAdmin в src/bot/bot.ts. Без
 // relation на User/Provider — денормализованные telegramId/name/username,
 // как в Transaction/LeadCharge: это запись обращения, а не бизнес-сущность.
+model Partner {
+  id          Int      @id @default(autoincrement())
+  name        String
+  tag         String? // короткая категория, напр. «Проф. химия оптом»
+  logoEmoji   String?  @map("logo_emoji")
+  logoImage   String?  @map("logo_image") // data: URI (base64), приоритетнее logoEmoji если задан; ограничение на размер — в роутере
+  description String? // текст на странице карточки партнёра
+  offerText   String?  @map("offer_text") // акция/промокод
+  website     String?
+  telegram    String?
+  area        String?
+  active      Boolean  @default(true) // видимость клиентам; управляется вручную из админки
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("partners")
+}
+
 model SupportTicket {
   id         Int      @id @default(autoincrement())
   telegramId String   @map("telegram_id")

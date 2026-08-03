@@ -100,6 +100,7 @@ async function renderTab(tab) {
     if (tab === "requests") return await renderRequests();
     if (tab === "reviews") return await renderReviews();
     if (tab === "monetization") return await renderMonetization();
+    if (tab === "partners") return await renderPartners();
     if (tab === "support") return await renderSupport();
   } catch (e) {
     content.innerHTML = `<p class="error">${e.message}</p>`;
@@ -713,6 +714,205 @@ async function openClientEdit(id) {
     });
     closeModal();
     renderTab("users");
+  });
+}
+
+// ---------- Партнёры ----------
+
+// Логотип сжимается в браузере до маленькой картинки и хранится как base64
+// прямо в БД (см. Partner.logoImage) — без файлового хранилища на сервере.
+// Ресайз важен не столько ради лимита в 300 КБ на бэкенде, сколько чтобы
+// случайное фото с телефона (несколько МБ) не раздувало базу.
+function resizeImageFile(file, maxDim = 240) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) return reject(new Error("Файл должен быть изображением"));
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Не удалось прочитать файл"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Не удалось открыть изображение"));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
+          else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function logoPreviewCellHtml(p) {
+  return p.logoImage
+    ? `<img src="${p.logoImage}" alt="" style="width:28px;height:28px;border-radius:6px;object-fit:cover;" />`
+    : p.logoEmoji || "";
+}
+
+async function renderPartners() {
+  const partners = await api("/admin/partners");
+  content.innerHTML = `
+    <div class="section-head"><h2>Партнёры</h2></div>
+    <p class="muted">Баннеры сторонних бизнесов — показываются клиенту отдельной лентой, не участвуют в подборе мастеров.</p>
+    <div class="form-grid">
+      <input id="pt-name" placeholder="Название компании" />
+      <input id="pt-tag" placeholder="Категория (напр. Грузоперевозки)" />
+      <label class="full tms-label-inline">Логотип (картинка, необязательно)</label>
+      <input id="pt-logo-file" class="full" type="file" accept="image/*" />
+      <img id="pt-logo-preview" style="display:none;width:48px;height:48px;border-radius:10px;object-fit:cover;" />
+      <input id="pt-logo" placeholder="Эмодзи-лого, если без картинки (напр. 🚚)" />
+      <input id="pt-website" placeholder="Сайт (необязательно)" />
+      <input id="pt-telegram" placeholder="Telegram (необязательно)" />
+      <input id="pt-area" placeholder="Район (необязательно)" />
+      <textarea id="pt-desc" class="full" placeholder="Описание для страницы партнёра"></textarea>
+      <input id="pt-offer" class="full" placeholder="Акция/промокод (напр. Скидка 15% по промокоду TMS15)" />
+      <button class="primary-btn full" id="pt-add">Добавить партнёра</button>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>Лого</th><th>Название</th><th>Категория</th><th>Порядок</th><th>Статус</th><th></th></tr></thead>
+      <tbody>
+        ${partners
+          .map(
+            (p) => `<tr>
+              <td>${p.id}</td>
+              <td>${logoPreviewCellHtml(p)}</td>
+              <td>${esc(p.name)}</td>
+              <td>${esc(p.tag || "")}</td>
+              <td>${p.sortOrder}</td>
+              <td>${p.active ? '<span class="badge">активен</span>' : '<span class="badge">скрыт</span>'}</td>
+              <td>
+                <button class="link-btn" data-edit-pt="${p.id}">Изменить</button>
+                <button class="link-btn" data-toggle-pt="${p.id}" data-active="${p.active}">${p.active ? "Скрыть" : "Показать"}</button>
+                <button class="link-btn" data-del-pt="${p.id}">Удалить</button>
+              </td>
+            </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+    ${partners.length === 0 ? '<p class="muted">Партнёров пока нет.</p>' : ""}
+  `;
+
+  let ptLogoImage = null;
+  $("#pt-logo-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) { ptLogoImage = null; $("#pt-logo-preview").style.display = "none"; return; }
+    try {
+      ptLogoImage = await resizeImageFile(file);
+      $("#pt-logo-preview").src = ptLogoImage;
+      $("#pt-logo-preview").style.display = "inline-block";
+    } catch (err) {
+      alert(err.message);
+      e.target.value = "";
+    }
+  });
+
+  $("#pt-add").addEventListener("click", async () => {
+    const name = $("#pt-name").value.trim();
+    if (!name) return;
+    await api("/admin/partners", {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        tag: $("#pt-tag").value.trim() || undefined,
+        logoImage: ptLogoImage || undefined,
+        logoEmoji: $("#pt-logo").value.trim() || undefined,
+        website: $("#pt-website").value.trim() || undefined,
+        telegram: $("#pt-telegram").value.trim() || undefined,
+        area: $("#pt-area").value.trim() || undefined,
+        description: $("#pt-desc").value.trim() || undefined,
+        offerText: $("#pt-offer").value.trim() || undefined,
+      }),
+    });
+    renderPartners();
+  });
+
+  document.querySelectorAll("[data-edit-pt]").forEach((btn) => {
+    btn.addEventListener("click", () => openPartnerEdit(Number(btn.dataset.editPt), partners));
+  });
+  document.querySelectorAll("[data-toggle-pt]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const active = btn.dataset.active === "true";
+      await api(`/admin/partners/${btn.dataset.togglePt}`, { method: "PUT", body: JSON.stringify({ active: !active }) });
+      renderPartners();
+    });
+  });
+  document.querySelectorAll("[data-del-pt]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Удалить партнёра?")) return;
+      await api(`/admin/partners/${btn.dataset.delPt}`, { method: "DELETE" });
+      renderPartners();
+    });
+  });
+}
+
+function openPartnerEdit(id, partners) {
+  const p = partners.find((x) => x.id === id);
+  if (!p) return;
+  showModal(`
+    <h3>Партнёр: ${esc(p.name)}</h3>
+    <div class="form-grid">
+      <input id="edit-pt-name" placeholder="Название" value="${esc(p.name)}" />
+      <input id="edit-pt-tag" placeholder="Категория" value="${esc(p.tag || "")}" />
+      <label class="full tms-label-inline">Логотип (картинка)</label>
+      <input id="edit-pt-logo-file" class="full" type="file" accept="image/*" />
+      <img id="edit-pt-logo-preview" src="${p.logoImage || ""}" style="display:${p.logoImage ? "inline-block" : "none"};width:48px;height:48px;border-radius:10px;object-fit:cover;" />
+      ${p.logoImage ? '<label class="checkbox-row full"><input type="checkbox" id="edit-pt-logo-remove" /> Удалить текущий логотип</label>' : ""}
+      <input id="edit-pt-logo" placeholder="Эмодзи-лого, если без картинки" value="${esc(p.logoEmoji || "")}" />
+      <input id="edit-pt-website" placeholder="Сайт" value="${esc(p.website || "")}" />
+      <input id="edit-pt-telegram" placeholder="Telegram" value="${esc(p.telegram || "")}" />
+      <input id="edit-pt-area" placeholder="Район" value="${esc(p.area || "")}" />
+      <input id="edit-pt-sort" type="number" placeholder="Порядок показа (меньше — выше)" value="${p.sortOrder}" />
+      <label class="checkbox-row full"><input type="checkbox" id="edit-pt-active" ${p.active ? "checked" : ""} /> Показывать клиентам</label>
+      <textarea id="edit-pt-desc" class="full" placeholder="Описание">${esc(p.description || "")}</textarea>
+      <input id="edit-pt-offer" class="full" placeholder="Акция/промокод" value="${esc(p.offerText || "")}" />
+      <button class="ghost-btn" id="edit-pt-cancel">Отмена</button>
+      <button class="primary-btn" id="edit-pt-save">Сохранить</button>
+    </div>
+  `);
+
+  let editLogoImage = undefined; // undefined — не трогать, null — удалить, строка — новая картинка
+  $("#edit-pt-logo-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      editLogoImage = await resizeImageFile(file);
+      $("#edit-pt-logo-preview").src = editLogoImage;
+      $("#edit-pt-logo-preview").style.display = "inline-block";
+      if ($("#edit-pt-logo-remove")) $("#edit-pt-logo-remove").checked = false;
+    } catch (err) {
+      alert(err.message);
+      e.target.value = "";
+    }
+  });
+
+  $("#edit-pt-cancel").addEventListener("click", closeModal);
+  $("#edit-pt-save").addEventListener("click", async () => {
+    const removeChecked = $("#edit-pt-logo-remove")?.checked;
+    await api(`/admin/partners/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: $("#edit-pt-name").value.trim(),
+        tag: $("#edit-pt-tag").value.trim(),
+        logoImage: removeChecked ? null : editLogoImage,
+        logoEmoji: $("#edit-pt-logo").value.trim(),
+        website: $("#edit-pt-website").value.trim(),
+        telegram: $("#edit-pt-telegram").value.trim(),
+        area: $("#edit-pt-area").value.trim(),
+        sortOrder: Number($("#edit-pt-sort").value) || 0,
+        active: $("#edit-pt-active").checked,
+        description: $("#edit-pt-desc").value.trim(),
+        offerText: $("#edit-pt-offer").value.trim(),
+      }),
+    });
+    closeModal();
+    renderPartners();
   });
 }
 
