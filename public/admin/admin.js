@@ -767,7 +767,8 @@ async function renderPartners() {
       <input id="pt-logo-file" class="full" type="file" accept="image/*" />
       <img id="pt-logo-preview" style="display:none;width:48px;height:48px;border-radius:10px;object-fit:cover;" />
       <input id="pt-logo" placeholder="Эмодзи-лого, если без картинки (напр. 🚚)" />
-      <input id="pt-website" placeholder="Сайт (необязательно)" />
+      <input id="pt-website" placeholder="Ссылка на сайт (с UTM-меткой, необязательно)" />
+      <input id="pt-website-label" placeholder="Текст ссылки для клиента (необязательно, иначе покажем саму ссылку)" />
       <input id="pt-telegram" placeholder="Telegram (необязательно)" />
       <input id="pt-area" placeholder="Район (необязательно)" />
       <textarea id="pt-desc" class="full" placeholder="Описание для страницы партнёра"></textarea>
@@ -827,6 +828,7 @@ async function renderPartners() {
         logoImage: ptLogoImage || undefined,
         logoEmoji: $("#pt-logo").value.trim() || undefined,
         website: $("#pt-website").value.trim() || undefined,
+        websiteLabel: $("#pt-website-label").value.trim() || undefined,
         telegram: $("#pt-telegram").value.trim() || undefined,
         area: $("#pt-area").value.trim() || undefined,
         description: $("#pt-desc").value.trim() || undefined,
@@ -868,7 +870,8 @@ function openPartnerEdit(id, partners) {
       <img id="edit-pt-logo-preview" src="${p.logoImage || ""}" style="display:${p.logoImage ? "inline-block" : "none"};width:48px;height:48px;border-radius:10px;object-fit:cover;" />
       ${p.logoImage ? '<label class="checkbox-row full"><input type="checkbox" id="edit-pt-logo-remove" /> Удалить текущий логотип</label>' : ""}
       <input id="edit-pt-logo" placeholder="Эмодзи-лого, если без картинки" value="${esc(p.logoEmoji || "")}" />
-      <input id="edit-pt-website" placeholder="Сайт" value="${esc(p.website || "")}" />
+      <input id="edit-pt-website" placeholder="Ссылка на сайт (с UTM-меткой)" value="${esc(p.website || "")}" />
+      <input id="edit-pt-website-label" placeholder="Текст ссылки для клиента (иначе покажем саму ссылку)" value="${esc(p.websiteLabel || "")}" />
       <input id="edit-pt-telegram" placeholder="Telegram" value="${esc(p.telegram || "")}" />
       <input id="edit-pt-area" placeholder="Район" value="${esc(p.area || "")}" />
       <input id="edit-pt-sort" type="number" placeholder="Порядок показа (меньше — выше)" value="${p.sortOrder}" />
@@ -906,6 +909,7 @@ function openPartnerEdit(id, partners) {
         logoImage: removeChecked ? null : editLogoImage,
         logoEmoji: $("#edit-pt-logo").value.trim(),
         website: $("#edit-pt-website").value.trim(),
+        websiteLabel: $("#edit-pt-website-label").value.trim(),
         telegram: $("#edit-pt-telegram").value.trim(),
         area: $("#edit-pt-area").value.trim(),
         sortOrder: Number($("#edit-pt-sort").value) || 0,

@@ -244,7 +244,8 @@ model Partner {
   logoImage   String?  @map("logo_image") // data: URI (base64), приоритетнее logoEmoji если задан; ограничение на размер — в роутере
   description String? // текст на странице карточки партнёра
   offerText   String?  @map("offer_text") // акция/промокод
-  website     String?
+  website      String? // фактическая ссылка (с UTM-меткой партнёра) — используется в href
+  websiteLabel String?  @map("website_label") // что видит клиент вместо самой ссылки; если пусто — показываем website как есть
   telegram    String?
   area        String?
   active      Boolean  @default(true) // видимость клиентам; управляется вручную из админки

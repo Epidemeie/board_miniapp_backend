@@ -8,6 +8,7 @@ type PartnerInput = {
   description?: string | null;
   offerText?: string | null;
   website?: string | null;
+  websiteLabel?: string | null;
   telegram?: string | null;
   area?: string | null;
   active?: boolean;
