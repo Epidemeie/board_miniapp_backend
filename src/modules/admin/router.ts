@@ -65,7 +65,10 @@ adminStatsRouter.get("/stats", async (req, res, next) => {
         orderBy: { _count: { area: "desc" } },
         take: 8,
       }),
-      prisma.request.groupBy({ by: ["status"], _count: { _all: true } }),
+      // archived — отдельный флаг (см. requestsService.archive), не смена status:
+      // удалённая клиентом заявка остаётся status "open" навсегда, поэтому без
+      // этого фильтра архивные заявки задваивали счётчик "open".
+      prisma.request.groupBy({ by: ["status"], _count: { _all: true }, where: { archived: false } }),
       prisma.user.findMany({ where: { requests: { some: {} } }, select: { _count: { select: { requests: true } } } }),
     ]);
     const services = await prisma.service.findMany({ where: { id: { in: byService.map((s) => s.serviceId) } } });
