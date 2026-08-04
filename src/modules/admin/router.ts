@@ -56,7 +56,7 @@ adminStatsRouter.get("/stats", async (req, res, next) => {
 
     // Спрос по нишам и районам — топ-8, чтобы не раздувать ответ на маленьких
     // и на будущих больших объёмах данных одинаково.
-    const [byService, byArea, byStatus, clientsWithRequests] = await Promise.all([
+    const [byService, byArea, byStatus, archivedCount, clientsWithRequests] = await Promise.all([
       prisma.request.groupBy({ by: ["serviceId"], _count: { _all: true }, orderBy: { _count: { serviceId: "desc" } }, take: 8 }),
       prisma.request.groupBy({
         by: ["area"],
@@ -66,9 +66,11 @@ adminStatsRouter.get("/stats", async (req, res, next) => {
         take: 8,
       }),
       // archived — отдельный флаг (см. requestsService.archive), не смена status:
-      // удалённая клиентом заявка остаётся status "open" навсегда, поэтому без
-      // этого фильтра архивные заявки задваивали счётчик "open".
+      // удалённая клиентом заявка остаётся status "open" навсегда. Без фильтра
+      // архивная заявка задваивала счётчик "open" — вместо этого ниже считаем
+      // архивные отдельным синтетическим статусом "archived".
       prisma.request.groupBy({ by: ["status"], _count: { _all: true }, where: { archived: false } }),
+      prisma.request.count({ where: { archived: true } }),
       prisma.user.findMany({ where: { requests: { some: {} } }, select: { _count: { select: { requests: true } } } }),
     ]);
     const services = await prisma.service.findMany({ where: { id: { in: byService.map((s) => s.serviceId) } } });
@@ -78,6 +80,7 @@ adminStatsRouter.get("/stats", async (req, res, next) => {
     }));
     const topAreas = byArea.map((a) => ({ area: a.area, count: a._count._all }));
     const requestsByStatus = Object.fromEntries(byStatus.map((s) => [s.status, s._count._all]));
+    if (archivedCount > 0) requestsByStatus.archived = archivedCount;
     const repeatClients = clientsWithRequests.filter((u) => u._count.requests > 1).length;
 
     res.json({

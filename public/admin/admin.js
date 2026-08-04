@@ -180,8 +180,8 @@ async function renderStats() {
     <table>
       <thead><tr><th>Статус</th><th>Количество</th></tr></thead>
       <tbody>
-        ${["open", "matched", "completed", "cancelled"]
-          .map((st) => `<tr><td>${statusBadge(st)}</td><td>${s.requestsByStatus[st] || 0}</td></tr>`)
+        ${["open", "matched", "completed", "cancelled", "archived"]
+          .map((st) => `<tr><td>${statusBadge(st === "archived" ? "в архиве" : st)}</td><td>${s.requestsByStatus[st] || 0}</td></tr>`)
           .join("")}
       </tbody>
     </table>
