@@ -50,6 +50,17 @@ providersRouter.put("/:id/deactivate", async (req, res, next) => {
   }
 });
 
+// Мастер сам редактирует профиль (услуги/районы/описание/цену) из личного
+// кабинета — см. providersService.updateProfile.
+providersRouter.put("/:id/profile", async (req, res, next) => {
+  try {
+    const { telegramId, description, priceFrom, serviceIds, areas } = req.body;
+    res.json(await providersService.updateProfile(Number(req.params.id), telegramId, { description, priceFrom, serviceIds, areas }));
+  } catch (e) {
+    next(e);
+  }
+});
+
 // Мастер сам меняет настройки уведомлений из личного кабинета
 providersRouter.put("/:id/prefs", async (req, res, next) => {
   try {

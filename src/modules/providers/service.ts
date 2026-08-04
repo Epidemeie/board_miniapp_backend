@@ -176,6 +176,51 @@ export const providersService = {
     return updated;
   },
 
+  // Мастер сам редактирует свой профиль (услуги/районы/описание/цену) — до
+  // этого такой возможности не было вообще: экран «Профиль» в Mini App менял
+  // только локальный React-стейт и никуда не отправлял изменения, из-за чего
+  // мастер не мог добавить/убрать услугу без обращения в админку. Только
+  // безопасные для самостоятельного изменения поля — verified/blocked/active
+  // остаются исключительно в providersService.update (админский путь).
+  updateProfile: async (
+    id: number,
+    telegramId: string,
+    data: Partial<{
+      description: string;
+      priceFrom: number;
+      serviceIds: number[];
+      areas: string[];
+    }>
+  ) => {
+    const provider = await prisma.provider.findUnique({ where: { id }, include: { user: true } });
+    if (!provider) {
+      const e: any = new Error("Мастер не найден");
+      e.status = 404;
+      throw e;
+    }
+    if (provider.user.telegramId !== telegramId) {
+      const e: any = new Error("Нет доступа к этому профилю");
+      e.status = 403;
+      throw e;
+    }
+    const { serviceIds, areas, ...providerData } = data;
+    return prisma.$transaction(async (tx) => {
+      if (serviceIds) {
+        await tx.providerService.deleteMany({ where: { providerId: id } });
+        await tx.providerService.createMany({ data: serviceIds.map((serviceId) => ({ providerId: id, serviceId })) });
+      }
+      if (areas) {
+        await tx.providerArea.deleteMany({ where: { providerId: id } });
+        await tx.providerArea.createMany({ data: areas.map((area) => ({ providerId: id, area })) });
+      }
+      return tx.provider.update({
+        where: { id },
+        data: providerData,
+        include: { user: true, services: { include: { service: true } }, areas: true },
+      });
+    });
+  },
+
   // Настройки уведомлений мастера — сам себе, из личного кабинета (не через
   // админку). telegramId в теле запроса — та же проверка владения профилем,
   // что и в deactivate выше.
