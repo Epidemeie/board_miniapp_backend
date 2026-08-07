@@ -6,7 +6,7 @@ const state = {
   userDetailId: null,
   userDetailTab: "client",
   userFilters: { search: "", role: "", service: "", area: "", minRating: "", status: "" },
-  requestsSubTab: "active",
+  requestFilters: { status: "", service: "", area: "", dateFrom: "", dateTo: "" },
   requestDetailId: null,
 };
 
@@ -1044,32 +1044,41 @@ async function renderServices() {
 
 // ---------- Заявки ----------
 
-async function renderRequests() {
-  if (state.requestDetailId) return renderRequestDetail(state.requestDetailId);
+// "archived" — отдельный синтетический статус для фильтра, симметрично
+// тому, как считается "Заявки по статусам" в аналитике (см. admin/router.ts):
+// r.archived — самостоятельный флаг (заявку удалил клиент), а не значение
+// r.status, поэтому обычные статусы фильтруются вместе с archived: false,
+// чтобы одна и та же заявка не подходила сразу под два фильтра.
+function applyRequestFilters(requests) {
+  const f = state.requestFilters;
+  return requests.filter((r) => {
+    if (f.status === "archived") {
+      if (!r.archived) return false;
+    } else if (f.status) {
+      if (r.archived || r.status !== f.status) return false;
+    }
+    if (f.service && String(r.serviceId) !== String(f.service)) return false;
+    if (f.area && r.area !== f.area) return false;
+    if (f.dateFrom && new Date(r.createdAt) < new Date(f.dateFrom)) return false;
+    if (f.dateTo && new Date(r.createdAt) > new Date(f.dateTo + "T23:59:59")) return false;
+    return true;
+  });
+}
 
-  const requests = await api("/admin/requests");
-  const sub = state.requestsSubTab || "active";
-  const active = requests.filter((r) => !r.archived);
-  const archived = requests.filter((r) => r.archived);
-  const list = sub === "archived" ? archived : active;
-
-  content.innerHTML = `
-    <div class="section-head"><h2>Заявки</h2></div>
-    <div class="tabs" style="padding: 0; margin-bottom: 14px; border-bottom: none;">
-      <button class="tab-btn ${sub === "active" ? "is-active" : ""}" data-req-sub="active">Активные (${active.length})</button>
-      <button class="tab-btn ${sub === "archived" ? "is-active" : ""}" data-req-sub="archived">Архивные заявки (${archived.length})</button>
-    </div>
+function requestsTableHtml(filtered, total) {
+  return `
+    <div class="section-head"><h2>Заявки (${filtered.length} из ${total})</h2></div>
     <table>
       <thead><tr><th>ID</th><th>Клиент</th><th>Услуга</th><th>Район</th><th>Статус</th><th>Откликов</th><th>Создана</th></tr></thead>
       <tbody>
-        ${list
+        ${filtered
           .map(
             (r) => `<tr class="row-clickable" data-view-request="${r.id}">
               <td>${r.id}</td>
               <td>${esc(r.user.name)}</td>
               <td>${esc(r.service.name)}</td>
               <td>${esc(r.area) || "—"}</td>
-              <td>${statusBadge(r.status)}</td>
+              <td>${statusBadge(r.status)} ${r.archived ? statusBadge("в архиве") : ""}</td>
               <td>${r.offers.length}</td>
               <td>${fmtDate(r.createdAt)}</td>
             </tr>`
@@ -1077,20 +1086,81 @@ async function renderRequests() {
           .join("")}
       </tbody>
     </table>
-    ${list.length === 0 ? `<p class="muted">${sub === "archived" ? "Архив пуст." : "Заявок пока нет."}</p>` : ""}
+    ${filtered.length === 0 ? '<p class="muted">Заявок не найдено.</p>' : ""}
+  `;
+}
+
+async function renderRequests() {
+  if (state.requestDetailId) return renderRequestDetail(state.requestDetailId);
+
+  const [requests, services] = await Promise.all([api("/admin/requests"), api("/services")]);
+
+  const areasSet = new Set();
+  requests.forEach((r) => r.area && areasSet.add(r.area));
+  const areas = Array.from(areasSet).sort();
+  const f = state.requestFilters;
+
+  content.innerHTML = `
+    <div class="filter-bar">
+      <select id="rf-status">
+        <option value="">Любой статус</option>
+        <option value="open" ${f.status === "open" ? "selected" : ""}>Открыта</option>
+        <option value="matched" ${f.status === "matched" ? "selected" : ""}>В работе</option>
+        <option value="completed" ${f.status === "completed" ? "selected" : ""}>Завершена</option>
+        <option value="cancelled" ${f.status === "cancelled" ? "selected" : ""}>Отменена</option>
+        <option value="archived" ${f.status === "archived" ? "selected" : ""}>В архиве</option>
+      </select>
+      <select id="rf-service">
+        <option value="">Все услуги</option>
+        ${services.map((s) => `<option value="${s.id}" ${String(f.service) === String(s.id) ? "selected" : ""}>${esc(s.name)}</option>`).join("")}
+      </select>
+      <select id="rf-area">
+        <option value="">Все районы</option>
+        ${areas.map((a) => `<option value="${esc(a)}" ${f.area === a ? "selected" : ""}>${esc(a)}</option>`).join("")}
+      </select>
+      <input id="rf-date-from" type="date" value="${esc(f.dateFrom)}" title="Создана с" />
+      <input id="rf-date-to" type="date" value="${esc(f.dateTo)}" title="Создана по" />
+      <button class="ghost-btn" id="rf-reset">Сбросить</button>
+    </div>
+
+    <div id="requests-table-area"></div>
   `;
 
-  document.querySelectorAll("[data-req-sub]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      state.requestsSubTab = btn.dataset.reqSub;
-      renderTab("requests");
+  function refresh() {
+    const filtered = applyRequestFilters(requests);
+    $("#requests-table-area").innerHTML = requestsTableHtml(filtered, requests.length);
+    document.querySelectorAll("[data-view-request]").forEach((row) => {
+      row.addEventListener("click", () => {
+        state.requestDetailId = Number(row.dataset.viewRequest);
+        renderTab("requests");
+      });
     });
+  }
+  refresh();
+
+  $("#rf-status").addEventListener("change", () => {
+    state.requestFilters.status = $("#rf-status").value;
+    refresh();
   });
-  document.querySelectorAll("[data-view-request]").forEach((row) => {
-    row.addEventListener("click", () => {
-      state.requestDetailId = Number(row.dataset.viewRequest);
-      renderTab("requests");
-    });
+  $("#rf-service").addEventListener("change", () => {
+    state.requestFilters.service = $("#rf-service").value;
+    refresh();
+  });
+  $("#rf-area").addEventListener("change", () => {
+    state.requestFilters.area = $("#rf-area").value;
+    refresh();
+  });
+  $("#rf-date-from").addEventListener("change", () => {
+    state.requestFilters.dateFrom = $("#rf-date-from").value;
+    refresh();
+  });
+  $("#rf-date-to").addEventListener("change", () => {
+    state.requestFilters.dateTo = $("#rf-date-to").value;
+    refresh();
+  });
+  $("#rf-reset").addEventListener("click", () => {
+    state.requestFilters = { status: "", service: "", area: "", dateFrom: "", dateTo: "" };
+    renderTab("requests");
   });
 }
 
